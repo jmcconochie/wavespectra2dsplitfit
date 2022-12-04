@@ -1,5 +1,9 @@
+=================================
 Wave Spectra 2D Splitting/Fitting
 =================================
+
+Introduction
+============
 
 The main purpose of this package is to find parameters of JONSWAP wave spectra with spreading that, when recombined,
  best match the input 2D frequency direction wave spectra.  Given a 2D wave spectrum S(f,theta), the package
@@ -16,7 +20,7 @@ with a robust way to separate swells and wind seas.
 
 
 Usage
------
+=====
 
 Import the waveSpec class
 

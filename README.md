@@ -1,9 +1,6 @@
-=======================================
-Ocean Wave Spectra 2D Splitting/Fitting
-=======================================
+# Ocean Wave Spectra 2D Splitting/Fitting
 
-Introduction
-============
+## Introduction
 
 The main purpose of this package is to find parameters of JONSWAP wave spectra with spreading that, when recombined,
  best match the input 2D frequency direction wave spectra.  Given a 2D wave spectrum S(f,theta), the package
@@ -19,10 +16,15 @@ of the ocean wave partitions for use in operations and engineering applications.
 with a robust way to separate swells and wind seas.
 
 
-Usage
-=====
+## Usage
 
 Import the waveSpec class
-
+```
 from wavespectra2dsplitfit import waveSpec
-
+import numpy as np
+spec = waveSpec()
+spec.f = np.arange(0.04,0.4,0.005)
+spec.th = np.arange(0,15,360)
+spec.S = np.zeros((len(spec.f),len(spec.th))
+spec.autoCorrect()
+```

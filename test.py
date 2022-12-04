@@ -2,7 +2,7 @@
 def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
     # Read wave spectra from a matlab file
     # variables should be:
-    #   td[nTimes] - vector of matlab date serials
+    #   td[nTimes,6] - vector of date td[1,:] = [year,month,day,hour,minute,second]
     #   fd[nFre] - vector of wave frequencies in Hz
     #   thetad[nDir] - vector of wave directions in degrees
     #   spec2d[nTimes,nFre,nDir] - array of 2D wave spectra for each time in m^2/(Hz.deg)

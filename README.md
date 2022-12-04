@@ -28,3 +28,10 @@ spec.th = np.arange(0,15,360)
 spec.S = np.zeros((len(spec.f),len(spec.th))
 spec.autoCorrect()
 ```
+
+## Example Result
+
+An example of the input and output reconstructed spectrum are shown in the image
+below.
+
+![This is an example output image](ExampleImage.png)

@@ -24,5 +24,4 @@ USER shell
 WORKDIR /home/shell/
 COPY wavespectra2dsplitfit .
 
-#CMD ["python3", "digitalWeatherForecast_byMetocean.py"]
-CMD ["bash"]
+#CMD ["bash"]

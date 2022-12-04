@@ -1,6 +1,6 @@
-=================================
-Wave Spectra 2D Splitting/Fitting
-=================================
+=======================================
+Ocean Wave Spectra 2D Splitting/Fitting
+=======================================
 
 Introduction
 ============
@@ -24,6 +24,5 @@ Usage
 
 Import the waveSpec class
 
-.. code-block:: python
-    from wavespectra2dsplitfit import waveSpec
+from wavespectra2dsplitfit import waveSpec
 

@@ -1,0 +1,10 @@
+[project]
+name = "wavespectra2dsplitfit"
+version = "0.1"
+dependencies = [
+   "scipy",
+   "pandas",
+   "matplotlib",
+   "scikit-image",
+   "scikit-learn"
+]

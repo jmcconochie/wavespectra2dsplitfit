@@ -1226,7 +1226,10 @@ class waveSpec:
             ta.pcolormesh(self.f,self.th,np.log(np.transpose(S+1e-9)),clim=[-15,0]) 
             if fConfig['useWind']: ta.contour(wsSpec.f,wsSpec.th,np.transpose(wsMask),levels=[0.5],colors='white')
             plotPeaks(ta)
-            ta.set_title(f"Input@{fConfig['fTime']},{fConfig['iTime']}")
+            if 'fTime' in keys(fConfig):
+                ta.set_title(f"Input@{fConfig['fTime']},{fConfig['iTime']}")
+            else:
+                ta.set_title(fConfig('tag'))    
             ta = b[0][1]
             ta.pcolormesh(smSpec.f,smSpec.th,np.log(np.transpose(Sm+1e-9)),clim=[-15,0]) 
             ta.set_title('Smoothed spectrum')

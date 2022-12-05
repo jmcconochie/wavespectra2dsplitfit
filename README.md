@@ -20,16 +20,35 @@ with a robust way to separate swells and wind seas.
 
 Import the waveSpec class
 ```
+# A. Make up the spectrum S(f,th)
 from wavespectra2dsplitfit import waveSpec
 import numpy as np
 spec = waveSpec()
-spec.f = np.arange(0.04,0.4,0.005)
-spec.th = np.arange(0,15,360)
+spec.f = np.arange(0.04,0.4,0.005)     # units in Hz
+spec.th = np.arange(0,15,360)          # units in deg
 spec.S = np.zeros((len(spec.f),len(spec.th))
+
+# B. User to fill spec.S with real data with units m^2/(Hz.deg)
+# spec.S = <user to assign 2D numpy array>
 spec.autoCorrect()
+
+# Setup fitting configuration - simple example with no wind (also usually best setup with no wind)
+tConfig = {
+    'maxPartitions': 3,
+    'useClustering': True,
+    'useWind': False,
+    'useFittedWindSea': False,
+    'useWindSeaInClustering': False,
+    'doPlot': True,
+    'saveFigFilename': "test.png"
+}
+specParms, fitStatus = spec.fit2DSpectrum(tConfig)
+print(specParms, fitStatus)
 ```
 
 ## Example Result
+
+Check out the test.py script as an example with data.
 
 An example of the input and output reconstructed spectrum are shown in the image
 below.

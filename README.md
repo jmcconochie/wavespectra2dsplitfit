@@ -50,6 +50,45 @@ print(specParms, fitStatus)
 
 Check out the test.py script as an example with data.
 
+```
+$ python test.py
+running reducePeaksClustering 6,3
+Optimization terminated successfully.
+         Current function value: 0.082135
+         Iterations: 1082
+         Function evaluations: 1733
+[[0.5859285326910995, 4.716981132075468, 1.0000053476007895, 0.07, 0.09, -4.234276488479486, 300.0, 4.716981132075468], [0.6129423521749234, 7.812499999999995, 5.970526837658344, 0.07, 0.09, -5.140143260428807, 290.0, 7.812499999999995], [0.4047506936099149, 10.869565217391298, 1.0000041524068202, 0.07, 0.09, -15.401874257914326, 240.0, 10.869565217391298]] [True, 0.08213522716322981, 1733]
+===== PARTITION =====
+Hs =  0.5859285326910995
+Tp =  4.716981132075468
+Gamma =  1.0000053476007895
+Sigma A =  0.07
+Sigma B =  0.09
+Tail Exp =  -4.234276488479486
+ThetaP =  300.0
+===== PARTITION =====
+Hs =  0.6129423521749234
+Tp =  7.812499999999995
+Gamma =  5.970526837658344
+Sigma A =  0.07
+Sigma B =  0.09
+Tail Exp =  -5.140143260428807
+ThetaP =  290.0
+===== PARTITION =====
+Hs =  0.4047506936099149
+Tp =  10.869565217391298
+Gamma =  1.0000041524068202
+Sigma A =  0.07
+Sigma B =  0.09
+Tail Exp =  -15.401874257914326
+ThetaP =  240.0
+===== FITTING OUTCOME =====
+Fitting successful:  True
+RMS error of fit:  0.08213522716322981
+Number of function evalutions:  1733
+```
+
+
 An example of the input and output reconstructed spectrum are shown in the image
 below.
 

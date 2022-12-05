@@ -1226,7 +1226,7 @@ class waveSpec:
             ta.pcolormesh(self.f,self.th,np.log(np.transpose(S+1e-9)),clim=[-15,0]) 
             if fConfig['useWind']: ta.contour(wsSpec.f,wsSpec.th,np.transpose(wsMask),levels=[0.5],colors='white')
             plotPeaks(ta)
-            if 'fTime' in keys(fConfig):
+            if 'fTime' in fConfig.keys():
                 ta.set_title(f"Input@{fConfig['fTime']},{fConfig['iTime']}")
             else:
                 ta.set_title(fConfig('tag'))    

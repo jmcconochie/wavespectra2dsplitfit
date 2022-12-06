@@ -51,7 +51,7 @@ class waveSpec:
         self.specType = ""
         
         self.meta = {}
-        self.autoCorrect()
+        #self.autoCorrect()
 
     def __repr__(self):
         import numpy as np
@@ -69,8 +69,8 @@ class waveSpec:
     
     def __str__(self):
         return __repr__(self)
-        
 
+    
     def _make_df(self):
         import numpy as np
         df = np.zeros(np.size(self.f))
@@ -82,7 +82,6 @@ class waveSpec:
     
     def _make_dth(self):
         import numpy as np
-
         dth = np.zeros(np.size(self.th))
         dth[0] = self.th[1] - self.th[0]
         dth[1:-1] = ( self.th[2:] - self.th[1:-1] ) / 2 + ( self.th[1:-1] - self.th[0:-2] ) / 2
@@ -159,15 +158,9 @@ class waveSpec:
                         else:
                             s[iFreq] = 13.1*ffp[iFreq]**-1.94
                     Dth = self.cos2s(waveDir,s)
-                    #import matplotlib.pyplot as plt
-                    #plt.figure()
-                    #plt.pcolormesh(self.f,self.th,np.transpose(Dth))
-                    #plt.colorbar()
                     self.S = np.zeros((len(self.f),len(self.th)))
                     for i,f in enumerate(self.f):
                         self.S[i,:] = self.Sf[i] * Dth[i,:] * np.pi/180
-                    # plt.figure()
-                    # plt.pcolormesh(self.f,self.th,np.transpose(self.S)))
                 else:
                     # Use Ewans with bifurcation
                     o = self.MauiBimodalWN(self.f,1/Tp)
@@ -177,15 +170,7 @@ class waveSpec:
                     m2 = dm2 > 360;  dm2[m2] = dm2[m2] - 360
                     s = o[:,2]
                     n = 5
-                    
                     Dth = self.dblwn(self.th,dm1,dm2,s,n)
-                    #import matplotlib.pyplot as plt
-                    #plt.figure()
-                    #plt.pcolormesh(self.f,self.th,np.transpose(Dth))
-                    #for i,f in enumerate(self.th):
-                    #    print(np.trapz(self.th,Dth[:,i]))
-                    #plt.colorbar()
-                    
                     self.S = np.transpose(ml.repmat(self.Sf,len(self.th),1)) * Dth #* np.pi/180
             else:
                 # User Ewans 2001 swell
@@ -198,7 +183,7 @@ class waveSpec:
             for i,f in enumerate(self.f):
                 self.S[i] = self.Sf[i] * Dth * np.pi/180
                 
-        self.autoCorrect()
+        #self.autoCorrect()
 
             
     def makeJONSWAP2D(self,fSpecParm,dSpecParm,spreadType='parametric'):
@@ -280,25 +265,6 @@ class waveSpec:
         else:
             self.specType = "frequency"
             
-       
-    
-    def rmsSpread2s(self,rmsSpread):
-        '''
-        rmsSpread2s(rmsSpread)
-        
-        Function to convert wave spreading [deg] to cos2s s parameter
-        INPUT:
-            rmsSpread - RMS spread in degrees
-        OUTPUT:
-            s - equivalent s parameter for cos2s spreading function
-        '''
-        import numpy as np
-        if rmsSpread < 0.1:
-            rmsSpread = 0.1
-        if rmsSpread > 60:
-            rmsSpread = 60
-        return 2 / (rmsSpread * np.pi/180.0)**2 - 1
-    
     
     def angDiff(self,fromAngle,toAngle):
         '''
@@ -331,7 +297,7 @@ class waveSpec:
         Function to create a 1D normalised direction function using cos2s
         INPUT:
             waveDir - main wave direction in [deg]
-            s - spread 
+            s - spread (if a vector len(f) will make frequency dependent cos2s)
         OUTPUT:
             Dth - vector of the normalised cos2s spread function for each direction
                 in the waveSpec instance th [deg] array
@@ -340,26 +306,32 @@ class waveSpec:
         import numpy as np
         import scipy.special as ss
         
+        # A. Initialisation
+        d2r = np.pi/180.0
+        dDirFac = 0.5 * np.abs(self.angDiff(self.th,waveDir)) * d2r
+        
+        # B. Cos2s function
         def dth(s):
-            A = (2 ** (2*s-1)*ss.gamma(s+1)**2) / (np.pi * ss.gamma(2*s+1))
-            dDir = np.abs(self.angDiff(self.th,waveDir))
-            Dth = A * ( np.cos( 0.5 * dDir * np.pi/180) ** (2 * s) )
+            A = (2.0 ** (2.0*s-1.0)*ss.gamma(s+1.0)**2.0) / (np.pi * ss.gamma(2.0*s+1.0))
+            Dth = A * ( np.cos( dDirFac ) ** (2.0 * s) )
             return Dth
             
+        # C. Make Dth - either frequency dependent or not
         if len(s) == len(self.f):
             # frequency dependent s
+            sg1 = ss.gamma(s+1.0)
+            sg2 = ss.gamma(2.0*s+1.0)
+            A = (2.0 ** (2.0*s-1.0) * sg1**2.0) / (np.pi * sg2)
             Dth = np.zeros([len(self.f),len(self.th)]) 
             for iFreq, tFreq in enumerate(self.f):
-                Dth[iFreq,:] = dth(s[iFreq]) 
-            #import matplotlib.pyplot as plt                
-            #plt.figure()
-            #plt.pcolormesh(self.f,self.th,np.transpose(Dth))
-            
+                Dth[iFreq,:] = A[iFreq] * ( np.cos( dDirFac ) ** (2.0 * s[iFreq]) )
         else:
             Dth = dth(s)
 
         return Dth
 
+    
+    
     def dblwn(self,d,dm1,dm2,s,n):
     # dblwn_SDA Double wrapped normal distribution
     #     function y = dblwn_SDA(d,dm1,dm2,s,n)
@@ -392,6 +364,8 @@ class waveSpec:
         sumYdelX = np.sum(y*deld)
         y = y/sumYdelX
         return y
+    
+    
     
     def MauiBimodalWN(self,f,fp):
         # MauiBimodalWN_SDA Maui bimodal spreading function, based on symmetric wrapped
@@ -441,56 +415,57 @@ class waveSpec:
 
 
     def EwansWrappedNormal(self,waveDir,Tp):
-    #wn_SDA Wrapped Normal spreading function.
-    #	Functional form is y = wn_SDA(x,x0,std)
-    #		where	x is the numpy vector of angles (in degrees),
-    #			    x0 is the mean direction (in degrees), and
-    
-    #               y[nth] is the spreading density in rad^(-1);
-    # Example:
-    #   x = np.arange(0,360,5)
-    #   x0 = 270
-    #   s = 15
-    # KCE: 9-Nov-22
-    # JdM adapated to python: 11 Nov 2022
-    
-    # x = np.arange(0,360,5)
-    # x0 = 270
-    # s = 15
+        '''
+        EwansWrappedNormal: Wrapped Normal spreading function.
+        INPUT: 
+              waveDir is the mean direction in degrees
+              Tp is the peak spectral wave period in seconds
+              self.th - vector of directions in degrees
+              self.f - vector of frequencies in Hz
+        
+        Revisions:
+            Kevin Ewans: 9-Nov-22
+            Jason McConochie: Adapted to python and vectorised: 11 Nov 2022
+        '''
+        import numpy as np
+        
+        # A. Input conversions
         x0 = waveDir
         x = self.th
-        import numpy as np
         fp = 1 / Tp
-        # sigma_wn is the standard deviation
-        yo = np.zeros([len(self.f),len(self.th)])
+        d2r = np.pi/180.
+        d = x * d2r
+        d0 = x0 * d2r
+        # TODO: This should use gmAndDiff
+        delx = np.diff(x) * d2r   # this needs to be fixed
+        delx = np.append(delx[1],delx)
+        
+        # B. Pre-initialisation
+        yo = np.zeros([len(self.f),len(self.th)])     # Output matrix
+        sqpi = np.sqrt(2*np.pi)
+        y0 = np.zeros(len(x))
+        y1 = np.ones(len(x))*1/(2*np.pi)
+        ffp = self.f / fp
+        a = 6; b = 4; c = -5;         sigma_wn_low = ( a + b * ffp ** c ) * d2r
+        a = -36; b = 46; c = 0.3;     sigma_wn_high = ( a + b * ffp ** c ) * d2r
+        s = sigma_wn_low * (ffp < 1.0) + sigma_wn_high * (ffp >= 1.0)
+        
+        # C. Loop over and do each frequency
         for iFreq,f in enumerate(self.f):
-            ffp = f / fp
-            if ffp < 1.0:
-                a = 6; b = 4; c = -5    
+            # C1. Apply spreading functional form
+            if s[iFreq] < 1:
+                y = y0
+                for i in range(-1,2):
+                    y = y + np.exp(-1/2*((d-d0-2*np.pi*i)/s[iFreq])**2)/(sqpi*s[iFreq])
             else:
-                a = -36; b = 46; c = 0.3
-            sigma_wn = a + b * ffp ** c
+                y = y1
+                for i in range(1,6):
+                    y = y + np.exp(-i*i*s[iFreq]*s[iFreq]/2)/np.pi*np.cos(i*d-i*d0)
             
-            d = x * np.pi/180.
-            d0 = x0 * np.pi/180.
-            s = sigma_wn * np.pi/180.
-            if s < 1:
-            	y = np.zeros(len(x))
-            	for i in range(-1,2):
-            		y = y + np.exp(-1/2*((d-d0-2*np.pi*i)/s)**2)/(np.sqrt(2*np.pi)*s)
-            else:
-            	y = np.ones(len(x))*1/(2*np.pi)
-            	for i in range(1,6):	
-            		y = y + np.exp(-i*i*s*s/2)/np.pi*np.cos(i*d-i*d0)
-            # *** make y a density
-            delx = np.diff(x) * np.pi/180
-            delx = np.append(delx[1],delx)
+            # C3. Make density
             sumYdelX = np.sum(y*delx)
-            yo[iFreq,:] = y/sumYdelX   # need to add pi/180 to normalise
-            #import matplotlib.pyplot as plt            
-            #plt.plot(x,y)     
-            #np.trapz(y*np.pi/180,x)
-            #plt.pcolormesh(self.f,self.th,np.transpose(d))
+            yo[iFreq,:] = y / sumYdelX   
+           
         return yo
 
 
@@ -563,11 +538,13 @@ class waveSpec:
                 parmActive - [[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread],....]
                     provide array of fixed parameters or True (if parameter to be fitted), for each partition
                 parmStart - [[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread],....] 
-                    procide starting parameters for each partition
+                    provide starting parameters for each partition
             OUTPUTS: [parmFit1, ...] 
                 JONSWAP and cos2s wave parameters [[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread],...] for each partition
         '''
+        
         def specErrF(x,*args):
+            
             import numpy as np
 
             inSpec = args[0]   # this is the input 2D spectrum
@@ -604,29 +581,13 @@ class waveSpec:
                     s.makeJONSWAP2D(vPart[0:6],vPart[6:9],spreadType) 
                 
                 sTot.S = sTot.S + s.S
-                #print("allPartParms:",iPart,vPart[0:6],vPart[6:9])
-                #print(s.S)
-    
-            # Calculate error
-            # def rmse(predictions, targets):
-            #     mP = predictions > 1e-4
-            #     mT = targets > 1e-4
-            #     P = np.log(predictions[np.logical_and(mP,mT)])
-            #     T = np.log(targets[np.logical_and(mP,mT)])
-            #     return np.sqrt(np.sum(np.power(P - T,2)))
-            
+               
             # Calculate error
             def rmse(predictions, targets):
                 return np.sqrt(np.sum(np.power(predictions - targets,2)))
             
             tErr=rmse(sTot.S,inSpec.S)
-            if plot:
-                if np.any(np.isnan(sTot.S)):
-                    None
-                    #print(sTot.S)
-                    #print("allPartParms:",allPartParms)
-                    #print("tErr:", tErr)
-                    
+
             for iPart,vPart in enumerate(allPartParms):
                 q = [
                     vPart[0]<0,  # Hs should not be below 0
@@ -638,9 +599,8 @@ class waveSpec:
                     vPart[7]>25   # spread, s should not be greater than 20
                     ]
                 if np.any(q):
-                     #print(allPartParms)
-                     tErr = 1e5
-            
+                    #print(allPartParms)
+                    tErr = 1e5
 
             return tErr
         
@@ -736,16 +696,12 @@ class waveSpec:
         imSpec.f = np.arange(self.f[0],self.f[-1],df_smoothing)
         imSpec.th = np.arange(self.th[0],self.th[-1],dth_smoothing)
         imSpec.S = interp_spec(self.S, self.f, self.th, imSpec.f, imSpec.th)
-        imSpec.autoCorrect()
-        #import matplotlib.pyplot as plt
-        #plt.pcolormesh(imSpec.f,imSpec.th,np.transpose(imSpec.S))
         
         from skimage import img_as_float
         im = img_as_float(imSpec.S)
         from skimage.filters import gaussian
         im = gaussian(im, sigma=(sigmaFreq_imUnits, sigmaDir_imUnits), truncate=3.5, channel_axis=2)
         from skimage.feature import peak_local_max
-        #coordinates = peak_local_max(im, min_distance=1, threshold_abs=1e-3)
         coordinates = peak_local_max(im, min_distance=1, threshold_abs=smFloorPercentMaxS*np.amax(im),exclude_border=False)
         
         nCoord = len(coordinates)
@@ -756,14 +712,14 @@ class waveSpec:
         S = np.zeros(nCoord)
         Ssmooth = np.zeros(nCoord)
         for i,iPeak in enumerate(coordinates):
-             Tp[i] = 1/imSpec.f[coordinates[i][0]]
-             ThetaP[i] = imSpec.th[coordinates[i][1]]
-             
-             iTp[i] = np.argmin(np.abs(self.f - (1/Tp[i])))
-             iThetaP[i] = np.argmin(np.abs(self.angDiff(self.th, ThetaP[i])))
-             
-             S[i] = imSpec.S[coordinates[i][0],coordinates[i][1]]
-             Ssmooth[i] = im[coordinates[i][0],coordinates[i][1]]
+            Tp[i] = 1/imSpec.f[coordinates[i][0]]
+            ThetaP[i] = imSpec.th[coordinates[i][1]]
+
+            iTp[i] = np.argmin(np.abs(self.f - (1/Tp[i])))
+            iThetaP[i] = np.argmin(np.abs(self.angDiff(self.th, ThetaP[i])))
+
+            S[i] = imSpec.S[coordinates[i][0],coordinates[i][1]]
+            Ssmooth[i] = im[coordinates[i][0],coordinates[i][1]]
          
         # Return also the smoothed spectrum
         #smSpec = waveSpec()
@@ -771,17 +727,13 @@ class waveSpec:
         #smSpec.th = self.th
         #smSpec.S = im
         imSpec.S = im
-        imSpec.autoCorrect()
+        #imSpec.autoCorrect()
          
         # Returns the Tp, ThetaP of the peaks and the smoothed spectrum smSpec
         # as a wvSpec object and the index of the peaks of Tp and Theta P
         #return Tp, ThetaP, S, imSpec, iTp_pk, iThetaP_pk, Ssmooth_pk  
         pks = {'Tp':Tp, 'ThetaP':ThetaP, 'Sp':S, 'iTp':iTp, 'iThetaP':iThetaP, 'Ssm':Ssmooth}
         return pks, imSpec 
-    
-    
-    
-    
     
     
     
@@ -810,7 +762,7 @@ class waveSpec:
         for i,v in enumerate(wsSpec.f):
             if wsSpec.f[i] < 0.25:
                 wsSpec.S[i,:] = np.zeros(len(wsSpec.th))
-        wsSpec.autoCorrect()
+        #wsSpec.autoCorrect()
         wsIntPar = wsSpec.specIntParm()
         # Get wind sea direction
         if wdir == None:
@@ -842,7 +794,7 @@ class waveSpec:
         # Make wind sea spectrum alone masked by the wind sea mask
         wsSpec = copy.deepcopy(self)
         wsSpec.S = self.S * windseamask*1 
-        wsSpec.autoCorrect()
+        #wsSpec.autoCorrect()
         wsIntPar = wsSpec.specIntParm()
         TpSea = wsIntPar[1]
         ThetaPSea = wsIntPar[6]
@@ -1189,13 +1141,13 @@ class waveSpec:
         sTot.f = np.array(self.f)
         sTot.th = np.array(self.th)
         sTot.S = self.S * 0
-        sTot.autoCorrect()
+        #sTot.autoCorrect()
         for iPart,tPart in enumerate(vPart):
             s = waveSpec()
             s.f = np.array(self.f)
             s.th = np.array(self.th)
             s.makeJONSWAP2D(tPart[0:6],tPart[6:9],fConfig['spreadType'])  
-            s.autoCorrect()
+            #s.autoCorrect()
             sTot.S = sTot.S + s.S
         ft = sTot
         ft.autoCorrect()

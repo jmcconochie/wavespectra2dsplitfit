@@ -3,7 +3,7 @@
 
 # # Simple Test for the wavespectra2dsplitfit package
 
-# In[ ]:
+# In[2]:
 
 
 # A. Read spectra data from a matlab file
@@ -71,7 +71,7 @@ print(f"RMS error of fit: ",fitStatus[1])
 print(f"Number of function evalutions: ",fitStatus[2])
 
 
-# In[ ]:
+# In[3]:
 
 
 try:

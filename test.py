@@ -1,13 +1,20 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # Simple Test for the wavespectra2dsplitfit package
+
+# In[ ]:
+
+
 # A. Read spectra data from a matlab file
 def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
     # Read wave spectra from a matlab file
     # variables should be:
-    #   td[nTimes,6] - vector of date td[1,:] = [year,month,day,hour,minute,second]
+    #   td[nTimes] - vector of matlab date serials
     #   fd[nFre] - vector of wave frequencies in Hz
     #   thetad[nDir] - vector of wave directions in degrees
     #   spec2d[nTimes,nFre,nDir] - array of 2D wave spectra for each time in m^2/(Hz.deg)
     import numpy as np
-    
     import scipy.io
     mat = scipy.io.loadmat(filename)
     mat.keys()
@@ -16,6 +23,7 @@ def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"
     th = mat[dirn]
     S = mat[spec2d] * np.pi/180
 
+    
     import datetime as dt
     sDate = [dt.datetime(x[0],x[1],x[2],x[3],x[4],x[5]) for x in tm]
 
@@ -43,6 +51,8 @@ tConfig = {
     'doPlot': True,
     'saveFigFilename': "test.png"
 }       
+
+# Just do the first spectrum
 specParms, fitStatus = rawSpec[0].fit2DSpectrum(tConfig)
 print(specParms, fitStatus)
 
@@ -59,3 +69,20 @@ print("===== FITTING OUTCOME =====")
 print(f"Fitting successful: ",fitStatus[0])
 print(f"RMS error of fit: ",fitStatus[1])
 print(f"Number of function evalutions: ",fitStatus[2])
+
+
+# In[ ]:
+
+
+try:
+    get_ipython() 
+    get_ipython().system('jupyter nbconvert test.ipynb --to python')
+except:
+    None
+
+
+# In[ ]:
+
+
+
+

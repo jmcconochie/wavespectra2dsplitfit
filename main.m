@@ -1,7 +1,7 @@
 % Example mat file shows how the matlab file should be created
 % for use with fitFromMatlabFile.py
 %
-% Variable required in mat file:
+% Variables required in mat file:
 %   td[nTimes,6] - matrix of date vector each row contains year, month, day, hour, minute, second 
 %   fd[nFre] - vector of spectral frequencies in Hz
 %   thetad[nDir] - vector of spectral directions in deg

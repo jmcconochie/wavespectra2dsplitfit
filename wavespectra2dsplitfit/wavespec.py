@@ -2,10 +2,9 @@
 """
 Created on Tue Nov  8 21:45:58 2022
 
-TODO: Rename functions and write descriptions and give examples for all
-TODO: Sort out logic for all options
+@author: J.McConochie 
+2022.11.15 j.mcconochie@shell.com
 
-@author: J.McConochie
 """
 
 # Make JONSWAP
@@ -15,7 +14,6 @@ class waveSpec:
 
     Functions to carry out spectral fitting for wave spectrum using 
         JONSWAP and cos2s.  Will fit nPartitions based on a peak selection.
-        
     
     Wave spectrum data can be loaded into class properties:
         f[nFre] - frequency [Hz]
@@ -37,6 +35,7 @@ class waveSpec:
     '''
     
     def __init__(self):
+        
         import numpy as np
         
         self.f = np.arange(0.01,0.51,0.01) # Hz
@@ -53,6 +52,7 @@ class waveSpec:
         self.meta = {}
         #self.autoCorrect()
 
+        
     def __repr__(self):
         import numpy as np
         o = "waveSpec Shapes\n"
@@ -66,6 +66,7 @@ class waveSpec:
         o += "Spectra:\n"
         o += f"{self.S}\n" 
         return o
+    
     
     def __str__(self):
         return __repr__(self)
@@ -380,6 +381,7 @@ class waveSpec:
         # Ref:Ewans JPO, March 1998.
         # KCE:10-Nov-22
         # Converted to python Jason McConochie, 11Nov2022
+        
         import numpy as np
         l = len(f)
         y = np.nan*np.zeros([l,3])
@@ -388,26 +390,26 @@ class waveSpec:
         i = np.where(f<1)
         j = np.where(f>=1)
         
-        # **** Angular difference lf - (Ewans, Eqn 6.4)
+        # Angular difference lf - (Ewans, Eqn 6.4)
         y[i,0] = np.ones([len(i),1])*14.93
         
-        # **** Angular difference hf - (Ewans, Eqn 6.4)
+        # Angular difference hf - (Ewans, Eqn 6.4)
         a = 5.453
         b = -2.750
         y[j,0] = np.exp(a+b/(f[j]))
         
-        # **** Std dev. lf - (Ewans, Eqn 6.5)
+        # Std dev. lf - (Ewans, Eqn 6.5)
         a = 11.38
         b = 5.357
         c = -7.929
         y[i,2] = a+b*(f[i])**c
         
-        # **** Std dev. hf - (Ewans, Eqn 6.5)
+        # Std dev. hf - (Ewans, Eqn 6.5)
         a = 32.13
         b = -15.39
         y[j,2] = a+b/(f[j]*f[j])
         
-        # *** Restrict Std dev. to be < 90;
+        # Restrict Std dev. to be < 90;
         k = np.where(y[:,2]>90)
         y[k,2] = 90
         
@@ -691,19 +693,17 @@ class waveSpec:
         
         # Regrid the spectrum and extend the edges by wrapping the directions at each end
         import numpy as np
-        #from wavespectra.core.utils import interp_spec
         imSpec = waveSpec()
         imSpec.f = np.arange(self.f[0],self.f[-1],df_smoothing)
         imSpec.th = np.arange(self.th[0],self.th[-1],dth_smoothing)
         imSpec.S = interp_spec(self.S, self.f, self.th, imSpec.f, imSpec.th)
         
         from skimage import img_as_float
-        im = img_as_float(imSpec.S)
         from skimage.filters import gaussian
-        im = gaussian(im, sigma=(sigmaFreq_imUnits, sigmaDir_imUnits), truncate=3.5, channel_axis=2)
         from skimage.feature import peak_local_max
+        im = img_as_float(imSpec.S)
+        im = gaussian(im, sigma=(sigmaFreq_imUnits, sigmaDir_imUnits), truncate=3.5, channel_axis=2)
         coordinates = peak_local_max(im, min_distance=1, threshold_abs=smFloorPercentMaxS*np.amax(im),exclude_border=False)
-        
         nCoord = len(coordinates)
         Tp = np.zeros(nCoord)
         ThetaP = np.zeros(nCoord)
@@ -722,21 +722,46 @@ class waveSpec:
             Ssmooth[i] = im[coordinates[i][0],coordinates[i][1]]
          
         # Return also the smoothed spectrum
-        #smSpec = waveSpec()
-        #smSpec.f = self.f
-        #smSpec.th = self.th
-        #smSpec.S = im
         imSpec.S = im
-        #imSpec.autoCorrect()
          
         # Returns the Tp, ThetaP of the peaks and the smoothed spectrum smSpec
         # as a wvSpec object and the index of the peaks of Tp and Theta P
-        #return Tp, ThetaP, S, imSpec, iTp_pk, iThetaP_pk, Ssmooth_pk  
         pks = {'Tp':Tp, 'ThetaP':ThetaP, 'Sp':S, 'iTp':iTp, 'iThetaP':iThetaP, 'Ssm':Ssmooth}
         return pks, imSpec 
     
-    
-    
+    def wavenuma(self, freq, water_depth):
+        """Chen and Thomson wavenumber approximation.
+        Args:
+            freq (DataArray, 1darray, float): Frequencies (Hz).
+            water_depth (DataArray, float): Water depth (m).
+        Returns:
+            k (DataArray, 1darray, float): Wavenumber 2pi / L.
+        Reference: Code taken from https://github.com/oceanum/wavespectra/blob/master/wavespectra/core/utils.py
+        """
+        import numpy as np
+        ang_freq = 2 * np.pi * freq
+        k0h = 0.10194 * ang_freq * ang_freq * water_depth
+        D = [0, 0.6522, 0.4622, 0, 0.0864, 0.0675]
+        a = 1.0
+        for i in range(1, 6):
+            a += D[i] * k0h ** i
+        return (k0h * (1 + 1.0 / (k0h * a)) ** 0.5) / water_depth
+
+    def celerity(self, freq, depth=None):
+        """Wave celerity C.
+        Args:
+            - freq (ndarray): Frequencies (Hz) for calculating C.
+            - depth (float): Water depth, use deep water approximation by default.
+        Returns;
+            - C: ndarray of same shape as freq with wave celerity (m/s) for each frequency.
+        Reference: Code taken from https://github.com/oceanum/wavespectra/blob/master/wavespectra/core/utils.py
+        """
+        if depth is not None:
+            import numpy as np
+            ang_freq = 2 * np.pi * freq
+            return ang_freq / self.wavenuma(freq, depth)
+        else:
+            return 1.56 / freq
     
               
     def processWindSeaSpec(self, wspd = None, wdir = None, dpt = None, agefac = 1.7, dirSprd = 1 ):
@@ -767,14 +792,12 @@ class waveSpec:
         # Get wind sea direction
         if wdir == None:
             wdir = wsIntPar[6] # use ThetaP as wind direction
-        
      
         # Make wind sea mask
-        from wavespectra.core.utils import celerity
         D2R = np.pi/180
         dth = self.angDiff(self.th,wdir)
         wind_speed_component = agefac * wspd * np.cos(D2R*dth)**(dirSprd)
-        wave_celerity = celerity(self.f, dpt)
+        wave_celerity = self.celerity(self.f, dpt)
         nth = len(self.th)
         nf = len(self.f)
         windseamask = np.transpose(ml.repmat(wave_celerity,nth,1)) <= ml.repmat(wind_speed_component,nf,1)
@@ -809,7 +832,7 @@ class waveSpec:
     
     
     
-    def reducePeaksClustering(self, pks, maxPeaks, plotClusterSpace = False, tag = "waveSpec"):
+    def reducePeaksClustering(self, pks, maxPeaks, plotClusterSpace = False, tag = "waveSpec", x1Scale = 2.5):
         '''
         Takes a set of 2D spectrum peak locations and clusters them together to reduce 
           the number of peak locations to the number requested.  
@@ -831,6 +854,7 @@ class waveSpec:
           as a plot of the normalised clustering space.
         tag - text string identifier pre-predended to filename of plot image saved to png.
           May include the path (e.g.  c:\myPathtoDir\tagName)
+        x1scale - scaling of the y-norm space
         
           
         The normalised clustering space is defined as Tp * cos(ThetaP), x1scale * Tp * sin(ThetaP)
@@ -838,10 +862,8 @@ class waveSpec:
         
         Jason McConochie, 4 Nov 2022, Rev 1
         '''
-        import numpy as np         
         
-        # 0. Default for the scaling of the y-norm space
-        x1Scale = 2.5
+        import numpy as np         
             
         # A. Convert real (Tp, ThetaP) to normalised space
         def real2norm(Tp,ThetaP):
@@ -864,7 +886,7 @@ class waveSpec:
         
         # C. Kmeans clustering if required
         if len(pks['Tp']) > maxPeaks:
-            print(f"running reducePeaksClustering {len(pks['Tp'])},{maxPeaks}")
+            #print(f"running reducePeaksClustering {len(pks['Tp'])},{maxPeaks}")
             
             # C1. Run kmeans clustering on all peaks 
             import os
@@ -975,6 +997,12 @@ class waveSpec:
   
         
         '''
+        # 0. Need to expose in config
+        agefac = 1.7
+        seaExp = 1.0 # use 0.2 to make the wind sea mask area directionally wider
+        # TODO: Expose Gaussian smoothing standard deviations
+        
+        # 1. Setup defaults for the configurations - used if user does not provide overrides
         DEFAULT_CONFIG = {
                 'maxPartitions': 2,
                 'useClustering': True,
@@ -991,47 +1019,54 @@ class waveSpec:
                 'iTime': "",
                 'fTime': ""
         }
+        
+        # 1a. Override default configurations
         fConfig = {}
         for key in DEFAULT_CONFIG.keys():
             if key in inConfig.keys():   
                 fConfig[key] = inConfig[key]
             else:
                 fConfig[key] = DEFAULT_CONFIG[key]
-        
-    
-        agefac = 1.7
-        seaExp = 1.0 # use 0.2 to make the wind sea mask area directionally wider
-      
+                
+        # 1b. Reset NaNs to 0
         import numpy as np   
-      
-        # A. Find spectral peaks
-        pks, smSpec = self.findPeaks()
-        if len(pks) == 0:
-            vPart = [None]*8
+        mask = np.isnan(self.S)
+        if np.any(mask):
+            print("---- Warning: Nans in spectra")
+            #self.S[mask] = 0
+        
+        # A. Run Gaussian smoothing and finding spectral peaks
+        pks, smSpec = self.findPeaks()  
+        #print(f".. found peaks: \n{pks}")
+        if len(pks['Tp']) == 0:
+            vPart = [[None]*8]
             fitStatus =[False,None,None]
             print('fit2DSpectrum: No peaks found - check input spectrum')
             return vPart, fitStatus
+        nPeaksToSelect = fConfig['maxPartitions'] # For later use define nPeaksToSelect (reduce if wind sea is used)
+        
         
         # B. Take advantage of the wind speed, direction and water depth if requested
         if fConfig['useWind']:
         
             # B1. Process the wind sea components
             pkWS, wsSpec, wsMask = self.processWindSeaSpec(fConfig['wspd'], fConfig['wdir'], fConfig['dpt'], agefac, seaExp)
+            
             if pkWS == None:
                 # No wind sea found
                 fConfig['useWind'] = False 
                 print('fit2DSpectrum: No wind sea found')
             else:    
-                # B2. Get the wind sea masked area Tp/ThetaP
+                # B2. Get the wind sea Tp/ThetaP
                 if fConfig['useFittedWindSea']:
-                    # Get Wind Sea Tp/ThetaP from nonlinear fitting to wind sea masked area
+                    # B2.1 Get Wind Sea Tp/ThetaP from nonlinear fitting to wind sea masked area
                     parmActive=[[True,True,True,0.07,0.09,-5,True,True]]
                     parmStart=[[2,6,3.3,0.07,0.09,-5,180,6]]
                     vWindSea, fitStatusWindSea = wsSpec.fitMulitDirJONSWAPCos2s(parmActive,parmStart,True,fConfig['spreadType'])
                     TpWindSea = vWindSea[0][1]
                     ThetaPWindSea = vWindSea[0][6]
                 else:    
-                    # Get Wind Sea Tp/ThetaP from maximum Ssm of all peaks in the wind sea mask area
+                    # B2.2 Get Wind Sea Tp/ThetaP from maximum Ssm of all peaks in the wind sea mask area
                     TpWindSea = None
                     ThetaPWindSea = None
                     SsmMaxWindSea = 0
@@ -1039,41 +1074,42 @@ class waveSpec:
                         if wsMask[pks['iTp'][iPeak],pks['iThetaP'][iPeak]]:
                             tSsmMaxWindSea = smSpec.S[pks['iTp'][iPeak],pks['iThetaP'][iPeak]] 
                             if tSsmMaxWindSea > SsmMaxWindSea:
+                                SsmMaxWindSea = tSsmMaxWindSea
                                 TpWindSea = pks['Tp'][iPeak]
                                 ThetaPWindSea = pks['ThetaP'][iPeak]   
-                                SsmMaxWindSea = tSsmMaxWindSea
-                 
                 
+                # B3. Remove all peaks within windsea mask array 
                 if TpWindSea == None:
-                   # No wind sea found
-                   fConfig['useWind'] = False 
-                   print('fit2DSpectrum: No wind sea found')
+                    # No wind sea found
+                    fConfig['useWind'] = False 
+                    print('fit2DSpectrum: No wind sea found')
                 else:   
-                    
-                   # B3. Remove all peaks within windsea mask array 
-                   iPeak = 0
-                   while 1:
-                       if wsMask[pks['iTp'][iPeak],pks['iThetaP'][iPeak]]:
-                           # Remove peak
-                           for key in pks.keys():
-                               pks[key] = np.delete(pks[key], iPeak)
-                       else:
-                           iPeak += 1
-                       if iPeak == len(pks['iTp']): break
-                   
-                   # B4. If using wind sea in cluster add to pks array for consideration
-                   if fConfig['useWindSeaInClustering']:
-                           pks['Tp'] = np.append(pks['Tp'],TpWindSea)
-                           pks['ThetaP'] = np.append(pks['ThetaP'],ThetaPWindSea)
-                           pks['iTp'] = np.append(pks['iTp'],np.argmin(np.abs(self.f - (1/TpWindSea))))
-                           pks['iThetaP'] = np.append(pks['iThetaP'],np.argmin(np.abs(self.angDiff(self.th, ThetaPWindSea))))
-                           pks['Sp'] = np.append(pks['Sp'],self.S[pks['iTp'][-1],pks['iThetaP'][-1]] )
-                           pks['Ssm'] = np.append(pks['Ssm'],smSpec.S[pks['iTp'][-1],pks['iThetaP'][-1]])
-                   else:
-                       None
-                       # Dont touch the peaks array, but later add in the wind sea as the first partition
-                    
+                    iPeak = 0
+                    while 1:
+                        if wsMask[pks['iTp'][iPeak],pks['iThetaP'][iPeak]]:
+                            # Remove peak
+                            for key in pks.keys():
+                                pks[key] = np.delete(pks[key], iPeak)
+                        else:
+                            iPeak += 1
+                        if iPeak == len(pks['iTp']): break
+                
+                # B4. If using wind sea in clustering add to pks array for consideration
+                if fConfig['useWindSeaInClustering']:
+                    pks['Tp'] = np.append(pks['Tp'],TpWindSea)
+                    pks['ThetaP'] = np.append(pks['ThetaP'],ThetaPWindSea)
+                    pks['iTp'] = np.append(pks['iTp'],np.argmin(np.abs(self.f - (1/TpWindSea))))
+                    pks['iThetaP'] = np.append(pks['iThetaP'],np.argmin(np.abs(self.angDiff(self.th, ThetaPWindSea))))
+                    pks['Sp'] = np.append(pks['Sp'],self.S[pks['iTp'][-1],pks['iThetaP'][-1]] )
+                    pks['Ssm'] = np.append(pks['Ssm'],smSpec.S[pks['iTp'][-1],pks['iThetaP'][-1]])
+                else:
+                    # Reduce number of peaks to select since one of them will be the wind sea
+                    if not fConfig['useClustering']:
+                        nPeaksToSelect = nPeaksToSelect - 1
         
+        # C. Clustering or Peak Selection
+        
+        # C1. FUNCTION: selectTopPeaks
         def selectTopPeaks(nPeaksToSelect, pks):
             # Select peaks to keep 
             iS_pk = np.argsort(pks['Sp'])
@@ -1087,35 +1123,20 @@ class waveSpec:
                     pks_sel[key][i-1] = pks[key][itPk]
             return pks_sel
         
-        # C. Run the clustering or use highest peaks 
-        nPeaksToSelect = fConfig['maxPartitions']
-        if fConfig['useWind']:
-            if fConfig['useClustering']:
-                if not fConfig['useWindSeaInClustering']: 
-                    nPeaksToSelect = nPeaksToSelect - 1
-            #if fConfig['useFittedWindSea']:
-            #    if not fConfig['useWindSeaInClustering']: 
-            #        nPeaksToSelect = nPeaksToSelect - 1
-                #else:
-                #     vPart = [None] *8
-                #     fitStatus =[False,None,None]
-                #     print('fit2DSpectrum: Must have clustering selected to useWindSeaInClustering')
-                #     return vPart, fitStatus
-                
-                
+        # C2. Run clustering or peak selection
         if fConfig['useClustering']:
             pks_sel, fConfig['useClustering'], whichClus = \
                 smSpec.reducePeaksClustering(pks, nPeaksToSelect, plotClusterSpace = fConfig['plotClusterSpace'], tag = fConfig['saveFigFilename'])
-            if len(pks_sel['Tp']) == 0:
-                pks_sel = selectTopPeaks(nPeaksToSelect,pks)
         else:
-            pks_sel = selectTopPeaks(nPeaksToSelect,pks)    
+            pks_sel = selectTopPeaks(nPeaksToSelect,pks)   
+        
         
         # D. Run the main fitting of the spectrum
         if len(pks_sel['Tp']) > 0:
             #[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread] 
             parmActive = []
             parmStart = []
+            # D1. Add
             if fConfig['useWind']:
                 if not fConfig['useWindSeaInClustering']:  
                     parmActive.append([True,TpWindSea,True,0.07,0.09,True,ThetaPWindSea,TpWindSea])
@@ -1134,27 +1155,24 @@ class waveSpec:
                 nPart[iPart] = vPart[sPartTps[iPart]] 
             vPart = nPart
         else:
-            print("*** Problem should not get here")
+            print("*** Problems should not get here")
         
-        # E. Reconstruct the fitted spectra
-        sTot = waveSpec()
-        sTot.f = np.array(self.f)
-        sTot.th = np.array(self.th)
-        sTot.S = self.S * 0
-        #sTot.autoCorrect()
-        for iPart,tPart in enumerate(vPart):
-            s = waveSpec()
-            s.f = np.array(self.f)
-            s.th = np.array(self.th)
-            s.makeJONSWAP2D(tPart[0:6],tPart[6:9],fConfig['spreadType'])  
-            #s.autoCorrect()
-            sTot.S = sTot.S + s.S
-        ft = sTot
-        ft.autoCorrect()
-        
+        # F. Make Plots if requested
+        if fConfig['doPlot']:        
+            # E. Reconstruct the fitted spectra
+            sTot = waveSpec()
+            sTot.f = np.array(self.f)
+            sTot.th = np.array(self.th)
+            sTot.S = self.S * 0
+            for iPart,tPart in enumerate(vPart):
+                s = waveSpec()
+                s.f = np.array(self.f)
+                s.th = np.array(self.th)
+                s.makeJONSWAP2D(tPart[0:6],tPart[6:9],fConfig['spreadType'])  
+                sTot.S = sTot.S + s.S
+            ft = sTot
+            ft.autoCorrect()
 
-
-        if fConfig['doPlot']:
             import matplotlib.pyplot as plt
 
             #. F Make plots of the spectra original and fitted

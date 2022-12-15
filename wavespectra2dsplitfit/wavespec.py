@@ -1132,30 +1132,27 @@ class waveSpec:
         
         
         # D. Run the main fitting of the spectrum
-        if len(pks_sel['Tp']) > 0:
-            #[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread] 
-            parmActive = []
-            parmStart = []
-            # D1. Add
-            if fConfig['useWind']:
-                if not fConfig['useWindSeaInClustering']:  
-                    parmActive.append([True,TpWindSea,True,0.07,0.09,True,ThetaPWindSea,TpWindSea])
-                    parmStart.append([2,TpWindSea,3.3,0.07,0.09,-5,ThetaPWindSea,TpWindSea])
-                    #pks_sel = selectTopPeaks(fConfig['maxPartitions']-1,pks) 
-            for i in range(0,len(pks_sel['Tp'])):
-                parmActive.append([True,pks_sel['Tp'][i],True,0.07,0.09,True,pks_sel['ThetaP'][i],pks_sel['Tp'][i]])
-                parmStart.append([2,pks_sel['Tp'][i],3.3,0.07,0.09,-5,pks_sel['ThetaP'][i],pks_sel['Tp'][i]])
-            
-            vPart,fitStatus = self.fitMulitDirJONSWAPCos2s(parmActive,parmStart,True,fConfig['spreadType'])
-            # Sort the partitions in order of increasing Tp
-            partTps = [x[1] for x in vPart]
-            sPartTps = np.argsort(partTps)
-            nPart = [[]]*len(vPart)
-            for iPart,tPart in enumerate(vPart):
-                nPart[iPart] = vPart[sPartTps[iPart]] 
-            vPart = nPart
-        else:
-            print("*** Problems should not get here")
+        parmActive = []         #[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread] 
+        parmStart = []
+        # D1. Add wind sea if using wind sea but not using it in clustering
+        if fConfig['useWind']:
+            if not fConfig['useWindSeaInClustering']:  
+                parmActive.append([True,TpWindSea,True,0.07,0.09,True,ThetaPWindSea,TpWindSea])
+                parmStart.append([2,TpWindSea,3.3,0.07,0.09,-5,ThetaPWindSea,TpWindSea])
+        # D2. Add all other peaks
+        for i in range(0,len(pks_sel['Tp'])):
+            parmActive.append([True,pks_sel['Tp'][i],True,0.07,0.09,True,pks_sel['ThetaP'][i],pks_sel['Tp'][i]])
+            parmStart.append([2,pks_sel['Tp'][i],3.3,0.07,0.09,-5,pks_sel['ThetaP'][i],pks_sel['Tp'][i]])
+
+        vPart,fitStatus = self.fitMulitDirJONSWAPCos2s(parmActive,parmStart,True,fConfig['spreadType'])
+        
+        # Sort the partitions in order of increasing Tp
+        partTps = [x[1] for x in vPart]
+        sPartTps = np.argsort(partTps)
+        nPart = [[]]*len(vPart)
+        for iPart,tPart in enumerate(vPart):
+            nPart[iPart] = vPart[sPartTps[iPart]] 
+        vPart = nPart
         
         # F. Make Plots if requested
         if fConfig['doPlot']:        

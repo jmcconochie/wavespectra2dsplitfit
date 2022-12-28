@@ -1,44 +1,52 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# In[1]:
+
+
+try:
+    get_ipython().run_line_magic('load_ext', 'autoreload')
+    get_ipython().run_line_magic('autoreload', '2')
+except:
+    None
+
+
 # # FUNCTION: runFitting
 
-# In[14]:
+# In[2]:
 
 
-def runFitting(tag, rawSpec, allTimes, timeRange, baseConfig):
+def runFitting(tag, f, th, S, sDate, timeRange, baseConfig):
     import numpy as np
     
     # B. Loop over times and fit spectra   
     allPartRes = []
     allPartStatus = []
     for iTime in timeRange:
-        fTime = rawSpec[iTime].meta["date"].strftime("%Y-%m-%dT%H_%M_%S")
+        fTime = sDate[iTime].strftime("%Y-%m-%dT%H_%M_%S")
         
-        # B3. Make the full configuration
-        aConfig = {
-            'iTime': iTime,
-            'fTime': fTime,
-            'saveFigFilename': f"images/{tag}_{fTime}"
-        }
-        tConfig = {**baseConfig, **aConfig}
-        if tConfig['useWind']:
-            tConfig['wspd'] = rawSpec[iTime].meta['wspd']
-            tConfig['wdir'] = rawSpec[iTime].meta['wdir']
-            tConfig['dpt'] = rawSpec[iTime].meta['dpt']
-        else:
-            tConfig['wspd'] = None
-            tConfig['wdir'] = None
-            tConfig['dpt'] = None
-        
-        # B4. Do the fitting
+        # B1. Do the fitting
         print("=== START =====================================================================")
-        print(iTime,fTime,tConfig)
-        specParms, fitStatus = rawSpec[iTime].fit2DSpectrum(tConfig)
+        print(iTime,fTime,baseConfig)
+        from wavespectra2dsplitfit.S2DFit import fit2DSpectrum
+        specParms, fitStatus, diagOut = fit2DSpectrum(f, th, S[iTime,:,:], **baseConfig)
         print(specParms, fitStatus)
         print("=== END =======================================================================")
+
+        from wavespectra2dsplitfit.S2DFit import plot2DFittingDiagnostics
+        df, dth, dS, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus = diagOut
+        plot2DFittingDiagnostics(
+            specParms, 
+            df, dth, dS, 
+            f_sm, th_sm, S_sm, 
+            wsMask,
+            Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus,
+            baseConfig['useWind'], baseConfig['useClustering'],
+            saveFigFilename = f"images/{tag}_{fTime}",  
+            tag = tag
+        )
         
-        # B5. Save off all the parameters
+        # B2. Save off all the parameters
         allPartRes.append(specParms)
         allPartStatus.append(fitStatus)                
     
@@ -47,7 +55,7 @@ def runFitting(tag, rawSpec, allTimes, timeRange, baseConfig):
 
 # # FUNCTION: fitResults2Pandas
 
-# In[15]:
+# In[3]:
 
 
 def fitResults2Pandas(allPartRes, allPartStatus, allTimes, timeRange):
@@ -77,55 +85,27 @@ def fitResults2Pandas(allPartRes, allPartStatus, allTimes, timeRange):
     return df
 
 
-# # FUNCTION: readspec_mat
-
-# In[16]:
-
-
-def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
-
-    import scipy.io
-    mat = scipy.io.loadmat(filename)
-    mat.keys()
-    tm = mat[dates]
-    f = mat[freq]
-    th = mat[dirn]
-    S = mat[spec2d]
-
-    import numpy as np
-    import datetime as dt
-    sDate = [dt.datetime(x[0],x[1],x[2],x[3],x[4],x[5]) for x in tm]
-
-    from wavespectra2dsplitfit.wavespec import waveSpec
-    #from wavespectra2dsplitfit.wavespectra2dsplitfit.wavespec import waveSpec
-    allSpec = [waveSpec() for x in sDate]
-    for i,tSpec in enumerate(allSpec):
-        tSpec.f = f[0]
-        tSpec.th = th[0]
-        tSpec.S = S[i,:,:]
-        tSpec.autoCorrect()
-        tSpec.meta = {'date':sDate[i]}
-    
-    return allSpec
-
-
 # # Main 
 
-# In[17]:
+# In[6]:
 
 
 def main(filename):
     
     # A. Read the data file 
-    #filename = 'data/Prelude_RPS_realtime_201901.mat'
-    allSpec = readspec_mat(filename)
+    import numpy as np
+    from wavespectra2dsplitfit.S2DFit import readWaveSpectrum_mat
+    f, th, S, sDate = readWaveSpectrum_mat(filename)
+    S = S * np.pi/180 # convert from m^2/(Hz.rad) to m^2/(Hz.deg)
 
     # B. Regrid spectra to increase speed of fitting
     import numpy as np
-    f = np.arange(0.04,0.4,0.01)
-    th = np.arange(0,350,15)
-    for tSpec in allSpec:
-        tSpec.regrid(f,th) 
+    from wavespectra2dsplitfit.S2DFit import interpSpectrum
+    f_out = np.arange(0.04,0.4,0.01)
+    th_out = np.arange(0,350,15)
+    S_out = np.zeros((len(sDate),len(f_out),len(th_out)))
+    for i in range(0,len(sDate),1):
+        S_out[i,:,:] = interpSpectrum(f, th, S[i,:,:], f_out, th_out)
 
     # C. Run the fitting
     baseConfig = {
@@ -134,22 +114,20 @@ def main(filename):
         'useWind': False,
         'useFittedWindSea': False, 
         'useWindSeaInClustering': False,
-        'plotClusterSpace': False,
-        'doPlot': True
     }
-    allTimes = [x.meta['date'] for x in allSpec]   
-    timeRange = range(0,len(allTimes),1)
-    #timeRange = range(0,10,1)
-    allPartRes, allPartStatus = runFitting("Test", allSpec, allTimes, timeRange, baseConfig)   
+    
+    timeRange = range(0,len(sDate),1)
+    #timeRange = range(0,2,1)
+    allPartRes, allPartStatus = runFitting("Test", f_out, th_out, S_out, sDate, timeRange, baseConfig)   
 
     # D. Compile and save the results
-    df = fitResults2Pandas(allPartRes, allPartStatus, allTimes, timeRange) 
+    df = fitResults2Pandas(allPartRes, allPartStatus, sDate, timeRange) 
     df.to_csv(f"fittedParms.csv")
 
     return df
 
 
-# In[ ]:
+# In[7]:
 
 
 try:
@@ -174,10 +152,4 @@ try:
     get_ipython().system('jupyter nbconvert fitFromMatlabFile.ipynb --to python')
 except:
     None
-
-
-# In[ ]:
-
-
-
 

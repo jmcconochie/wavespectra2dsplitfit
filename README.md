@@ -20,30 +20,52 @@ with a robust way to separate swells and wind seas.
 
 Import the waveSpec class
 ```
-# A. Make up the spectrum S(f,th)
-from wavespectra2dsplitfit import waveSpec
 import numpy as np
-spec = waveSpec()
-spec.f = np.arange(0.04,0.4,0.005)     # units in Hz
-spec.th = np.arange(0,15,360)          # units in deg
-spec.S = np.zeros((len(spec.f),len(spec.th))
-
-# B. User to fill spec.S with real data with units m^2/(Hz.deg)
-# spec.S = <user to assign 2D numpy array>
-spec.autoCorrect()
-
-# Setup fitting configuration - simple example with no wind (also usually best setup with no wind)
+from wavespectra2dsplitfit.S2DFit import readWaveSpectrum_mat
+filename = 'data/ExampleWaveSpectraObservations.mat'
+f, th, S, sDate = readWaveSpectrum_mat(filename)
+S = S * np.pi/180 # convert from m^2/(Hz.rad) to m^2/(Hz.deg)
+   
+# Setup fitting configuration - simple example with no wind (also usually best setup with no wind)    
 tConfig = {
     'maxPartitions': 3,
     'useClustering': True,
     'useWind': False,
-    'useFittedWindSea': False,
+    'useFittedWindSea': False, 
     'useWindSeaInClustering': False,
-    'doPlot': True,
-    'saveFigFilename': "test.png"
 }
-specParms, fitStatus = spec.fit2DSpectrum(tConfig)
+
+# Just do the first spectrum
+from wavespectra2dsplitfit.S2DFit import fit2DSpectrum
+specParms, fitStatus, diagOut = fit2DSpectrum(f[0], th[0], S[0,:,:], **tConfig)
 print(specParms, fitStatus)
+
+for tSpec in specParms:
+    print("===== PARTITION =====")
+    print("Hs = ",tSpec[0])
+    print("Tp = ",tSpec[1])
+    print("Gamma = ",tSpec[2])
+    print("Sigma A = ",tSpec[3])
+    print("Sigma B = ",tSpec[4])
+    print("Tail Exp = ",tSpec[5])
+    print("ThetaP = ",tSpec[6])
+print("===== FITTING OUTCOME =====")
+print(f"Fitting successful: ",fitStatus[0])
+print(f"RMS error of fit: ",fitStatus[1])
+print(f"Number of function evalutions: ",fitStatus[2])
+
+from wavespectra2dsplitfit.S2DFit import plot2DFittingDiagnostics
+f, th, S, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus = diagOut
+plot2DFittingDiagnostics(
+    specParms, 
+    f, th, S, 
+    f_sm, th_sm, S_sm, 
+    wsMask,
+    Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus,
+    tConfig['useWind'], tConfig['useClustering'],
+    saveFigFilename = 'test',  
+    tag = "S2DFit Simple Test"  
+)
 ```
 
 ## Example Result
@@ -52,7 +74,6 @@ Check out the test.py script as an example with data.
 
 ```
 $ python test.py
-running reducePeaksClustering 6,3
 Optimization terminated successfully.
          Current function value: 0.082135
          Iterations: 1082
@@ -92,4 +113,4 @@ Number of function evalutions:  1733
 An example of the input and output reconstructed spectrum are shown in the image
 below.
 
-![This is an example output image](ExampleImage.png)
+![This is an example output image](test_pk.png)

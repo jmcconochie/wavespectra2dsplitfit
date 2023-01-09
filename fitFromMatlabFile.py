@@ -19,13 +19,13 @@ except:
 def runFitting(tag, f, th, S, sDate, timeRange, baseConfig):
     import numpy as np
     
-    # B. Loop over times and fit spectra   
+    # A. Loop over times and fit spectra   
     allPartRes = []
     allPartStatus = []
     for iTime in timeRange:
         fTime = sDate[iTime].strftime("%Y-%m-%dT%H_%M_%S")
         
-        # B1. Do the fitting
+        # A1. Do the fitting
         print("=== START =====================================================================")
         print(iTime,fTime,baseConfig)
         from wavespectra2dsplitfit.S2DFit import fit2DSpectrum
@@ -33,6 +33,7 @@ def runFitting(tag, f, th, S, sDate, timeRange, baseConfig):
         print(specParms, fitStatus)
         print("=== END =======================================================================")
 
+        # A2. Plot diagnostics
         from wavespectra2dsplitfit.S2DFit import plot2DFittingDiagnostics
         df, dth, dS, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus = diagOut
         plot2DFittingDiagnostics(
@@ -87,7 +88,7 @@ def fitResults2Pandas(allPartRes, allPartStatus, allTimes, timeRange):
 
 # # Main 
 
-# In[6]:
+# In[4]:
 
 
 def main(filename):
@@ -127,7 +128,7 @@ def main(filename):
     return df
 
 
-# In[7]:
+# In[ ]:
 
 
 try:

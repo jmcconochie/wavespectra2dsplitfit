@@ -172,7 +172,7 @@ def JONSWAPCos2s(f, th, fSpecParm, dSpecParm, spreadType='parametric'):
 
 # ## multiJONSWAPCos2s
 
-# In[93]:
+# In[7]:
 
 
 def multiJONSWAPCos2s(f, th, specParm, spreadType='parametric'):
@@ -447,7 +447,7 @@ def EwansWrappedNormal(f, th, waveDir,Tp):
 
 # ## readspec_mat
 
-# In[2]:
+# In[12]:
 
 
 def readWaveSpectrum_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
@@ -493,7 +493,7 @@ def readWaveSpectrum_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d=
 
 # ## interpSpectrum
 
-# In[12]:
+# In[13]:
 
 
 def interpSpectrum(f,th,S,f_out,th_out):
@@ -531,7 +531,7 @@ def interpSpectrum(f,th,S,f_out,th_out):
 
 # ## freqSpecFrom2D
 
-# In[13]:
+# In[14]:
 
 
 def freqSpecFrom2D(f, th, S):
@@ -564,7 +564,7 @@ def freqSpecFrom2D(f, th, S):
 
 # ## dirSpecFrom2D
 
-# In[14]:
+# In[15]:
 
 
 def dirSpecFrom2D(f, th, S):
@@ -597,7 +597,7 @@ def dirSpecFrom2D(f, th, S):
 
 # ## windSeaSpectrum
 
-# In[15]:
+# In[16]:
 
 
 def windSeaSpectrum(f, th, S, wspd, wdir, dpt, agefac = 1.7, dirSprd = 1):
@@ -649,7 +649,7 @@ def windSeaSpectrum(f, th, S, wspd, wdir, dpt, agefac = 1.7, dirSprd = 1):
 
 # ## findSpectrumPeaks
 
-# In[16]:
+# In[17]:
 
 
 def findSpectrumPeaks(f, th, S, floorPercentMaxS = 0.05):
@@ -695,7 +695,7 @@ def findSpectrumPeaks(f, th, S, floorPercentMaxS = 0.05):
 
 # ## windDirFromSpectrum
 
-# In[17]:
+# In[18]:
 
 
 def windDirFromSpectrum(f, th, S):
@@ -725,7 +725,7 @@ def windDirFromSpectrum(f, th, S):
 
 # ## smoothSpectrum
 
-# In[18]:
+# In[19]:
 
 
 def smoothSpectrum(
@@ -782,7 +782,7 @@ def smoothSpectrum(
 
 # ## fit2DSpectrum
 
-# In[19]:
+# In[20]:
 
 
 def fit2DSpectrum(
@@ -939,7 +939,7 @@ def fit2DSpectrum(
 
 # ## fitWindSeaSpectrum
 
-# In[20]:
+# In[21]:
 
 
 def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
@@ -968,7 +968,7 @@ def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
 
 # ## selectPeakInMaskedSpectrum
 
-# In[21]:
+# In[22]:
 
 
 def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMask):
@@ -988,7 +988,7 @@ def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMas
         - Written: Jason McConochie 15/Dec/2022
 
     """
-    
+    import numpy as np
     mask = wsMask[iTp_pk, iThetaP_pk]
     if np.shape(S_pk[mask]) == ():
         return None, None
@@ -998,7 +998,7 @@ def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMas
 
 # ## selectPeaksFromSpectrum
 
-# In[22]:
+# In[23]:
 
 
 def selectPeaksFromSpectrum(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect):
@@ -1019,6 +1019,7 @@ def selectPeaksFromSpectrum(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect):
         - Written: Jason McConochie 15/Dec/2022
 
     """
+    import numpy as np
     
     # Select peaks to keep 
     iS_pk = np.argsort(S_pk)
@@ -1034,7 +1035,7 @@ def selectPeaksFromSpectrum(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect):
 
 # ## selectPeaksByClustering
 
-# In[23]:
+# In[24]:
 
 
 def selectPeaksByClustering(Tp_pk, ThetaP_pk, S_pk, maxPeaks, x1Scale = 2.5):
@@ -1130,7 +1131,7 @@ def selectPeaksByClustering(Tp_pk, ThetaP_pk, S_pk, maxPeaks, x1Scale = 2.5):
 
 # ## fitMultiJONSWAPCos2s
 
-# In[24]:
+# In[25]:
 
 
 def fitMultiJONSWAPCos2s(f, th, S, parmActive, parmStart, spreadType='parametric', maxIterFact=500, tolIter=1e-2):
@@ -1245,7 +1246,7 @@ def fitMultiJONSWAPCos2s(f, th, S, parmActive, parmStart, spreadType='parametric
 
 # ## plot2DFittingDiagnostics
 
-# In[77]:
+# In[26]:
 
 
 def plot2DFittingDiagnostics(
@@ -1370,7 +1371,7 @@ def plot2DFittingDiagnostics(
 
 # ## plotClusterSpace
 
-# In[26]:
+# In[27]:
 
 
 def plotClusterSpace():
@@ -1403,7 +1404,7 @@ def plotClusterSpace():
 
 # # Make python file
 
-# In[5]:
+# In[28]:
 
 
 #!jupyter nbconvert S2DFit.ipynb --to python
@@ -1411,7 +1412,7 @@ def plotClusterSpace():
 
 # # Testing
 
-# In[54]:
+# In[29]:
 
 
 def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
@@ -1434,7 +1435,7 @@ def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"
     return f, th, S, sDate
 
 
-# In[120]:
+# In[30]:
 
 
 def main():
@@ -1480,7 +1481,7 @@ def main():
         )
 
 
-# In[116]:
+# In[31]:
 
 
 #main()
@@ -1521,7 +1522,7 @@ def main():
 
 # # Ununsed
 
-# In[ ]:
+# In[32]:
 
 
 # def _make_df(self):
@@ -1556,7 +1557,7 @@ def main():
    
 
 
-# In[ ]:
+# In[33]:
 
 
 #     def autoCorrect(self):

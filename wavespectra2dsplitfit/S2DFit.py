@@ -595,12 +595,12 @@ def dirSpecFrom2D(f, th, S):
     return Sth
 
 
-# ## windSeaSpectrum
+# ## windSeaSpectrumMask
 
-# In[16]:
+# In[1]:
 
 
-def windSeaSpectrum(f, th, S, wspd, wdir, dpt, agefac = 1.7, dirSprd = 1):
+def windSeaSpectrumMask(f, th, S, wspd, wdir, dpt, agefac = 1.7, seaExp = 1):
     """Estimates part of spectrum to be wind sea based on wind speed and direction
     
     Takes the spectrum returns a wind sea spectrum only containing wave frequencies and directions
@@ -638,11 +638,11 @@ def windSeaSpectrum(f, th, S, wspd, wdir, dpt, agefac = 1.7, dirSprd = 1):
     import numpy.matlib as ml
     
     # A. Make wind sea mask
-    wind_speed_component = agefac * wspd * np.cos( np.pi / 180 * angDiff(th, wdir) ) ** (dirSprd)
+    wind_speed_component = agefac * wspd * np.cos( np.pi / 180 * angDiff(th, wdir) ) ** (seaExp)
     wave_celerity = celerity(f, dpt)
     wsMask = np.transpose(ml.repmat(wave_celerity,len(th),1)) <= ml.repmat(wind_speed_component,len(f),1)
-    if np.logical_not(np.all(np.flatten(wsMask))):
-        return None
+    if np.logical_not(np.all(wsMask.flatten())):
+        return np.zeros_like(S)==0
     
     return wsMask
 
@@ -680,17 +680,13 @@ def findSpectrumPeaks(f, th, S, floorPercentMaxS = 0.05):
     nCoord = len(coordinates)
     Tp = np.zeros(nCoord)
     ThetaP = np.zeros(nCoord)
-    iTp = np.zeros(nCoord,int)
-    iThetaP = np.zeros(nCoord,int)
     Spk = np.zeros(nCoord)
     for i,iPeak in enumerate(coordinates):
         Tp[i] = 1/f[coordinates[i][0]]
         ThetaP[i] = th[coordinates[i][1]]
-        iTp[i] = np.argmin(np.abs(f - (1/Tp[i])))
-        iThetaP[i] = np.argmin(np.abs(angDiff(th, ThetaP[i])))
         Spk[i] = S[coordinates[i][0],coordinates[i][1]]
 
-    return Tp, ThetaP, iTp, iThetaP, Spk
+    return Tp, ThetaP, Spk
 
 
 # ## windDirFromSpectrum
@@ -866,41 +862,48 @@ def fit2DSpectrum(
     
     # A. Gaussian smoothing and finding spectral peaks
     f_sm, th_sm, S_sm = smoothSpectrum(f, th, S, sigmaFreqHz, sigmaDirDeg, df_smoothing, dth_smoothing)    
-    Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk = findSpectrumPeaks(f_sm, th_sm, S_sm, floorPercentMaxS)
+    Tp_pk, ThetaP_pk, S_pk = findSpectrumPeaks(f_sm, th_sm, S_sm, floorPercentMaxS)
+    iTp_pk = np.zeros(len(Tp_pk),int)
+    iThetaP_pk = np.zeros(len(Tp_pk),int)
+    for i in range(0,len(Tp_pk)):
+        iTp_pk[i] = np.argmin(np.abs(f - (1/Tp_pk[i])))
+        iThetaP_pk[i] = np.argmin(np.abs(angDiff(th, ThetaP_pk[i])))
     
     # B1. Estimate wind sea part of the spectrum
     wsMask = np.zeros_like(S) == 0
     if useWind: 
         if wdir == None: # If no wind direction, then estimate it from the 2D wave spectrum
             wdir =  windDirFromSpectrum(f, th, S)
-        wsMask = estimateWindSeaSpectrum(f, th, S, wspd, wdir, dpt, agefac, dirSprd)
+        wsMask = windSeaSpectrumMask(f, th, S, wspd, wdir, dpt, agefac, seaExp)
         useWind = np.shape(wsMask) != ()
     
     # B2. Get the wind sea Tp/ThetaP
     if useWind:
         if useFittedWindSea:
-            Tp_ws, ThetaP_ws = fitWindSeaSpectrum(f, th, S * wsMask, spreadType, maxIterFact, tolIter) # Get Wind Sea Tp/ThetaP from nonlinear fitting to wind sea masked area
+            Tp_ws, ThetaP_ws, S_ws = fitWindSeaSpectrum(f, th, S * wsMask, spreadType, maxIterFact, tolIter) # Get Wind Sea Tp/ThetaP from nonlinear fitting to wind sea masked area
         else:   
-            Tp_ws, ThetaP_ws = selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMask) # Get Wind Sea Tp/ThetaP from highest Peak
+            Tp_ws, ThetaP_ws, S_ws = selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMask) # Get Wind Sea Tp/ThetaP from highest Peak
         
         # Remove all peaks in wind sea mask area
         mask = wsMask[iTp_pk, iThetaP_pk]
         Tp_pk = Tp_pk[mask] 
-        ThetaP_pk = ThetaP_pk[mask] 
+        ThetaP_pk = ThetaP_pk[mask]
         
         useWind = Tp_ws != None
   
     # B4. If using wind sea in clustering add to pks array for consideration
     if useWind:
         if useWindSeaInClustering:
-            Tp_pk = np.append(Tp_pk,TpWindSea)
-            ThetaP_pk = np.append(ThetaP_pk,ThetaPWindSea)
+            Tp_pk = np.append(Tp_pk,Tp_ws)
+            ThetaP_pk = np.append(ThetaP_pk,ThetaP_ws)
+            S_pk = np.append(S_pk,S_ws)
         else:
             # Reduce number of peaks to select since one of them will be the wind sea
             if not useClustering:
                 nPeaksToSelect = nPeaksToSelect - 1
                 
     # C. Clustering or Peak Selection
+    whichClus = None
     if useClustering:
         Tp_sel, ThetaP_sel, idx_sel, useClustering, whichClus = selectPeaksByClustering(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect)
     else:
@@ -910,8 +913,8 @@ def fit2DSpectrum(
     parmActive = []  #[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread] 
     parmStart = []
     if useWind and (not useWindSeaInClustering):  
-        parmActive.append([True, TpWindSea, True, 0.07, 0.09, True, ThetaPWindSea, TpWindSea])
-        parmStart.append([2, TpWindSea, 3.3, 0.07, 0.09, -5, ThetaPWindSea, TpWindSea])
+        parmActive.append([True, Tp_ws, True, 0.07, 0.09, True, ThetaP_ws, Tp_ws])
+        parmStart.append([2, Tp_ws, 3.3, 0.07, 0.09, -5, ThetaP_ws, Tp_ws])
     for i in range(0,len(Tp_sel)):
         parmActive.append([True, Tp_sel[i], True, 0.07, 0.09, True,ThetaP_sel[i], Tp_sel[i]])
         parmStart.append([2, Tp_sel[i], 3.3, 0.07, 0.09, -5, ThetaP_sel[i], Tp_sel[i]])
@@ -939,7 +942,7 @@ def fit2DSpectrum(
 
 # ## fitWindSeaSpectrum
 
-# In[21]:
+# In[18]:
 
 
 def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
@@ -959,11 +962,18 @@ def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
         - Written: Jason McConochie 15/Dec/2022
     
     """
-    
+    import numpy as np
     parmActive=[[True, True, True, 0.07, 0.09, -5, True, True]]
     parmStart=[[2, 6, 3.3, 0.07, 0.09, -5, 180, 6]]
-    vWindSea, fitStatusWindSea = fitMulitJONSWAPCos2s(f, th, S, parmActive, parmStart, spreadType, maxIterFact, tolIter)
-    return vWindSea[0][1], vWindSea[0][6]              
+    vWindSea, fitStatusWindSea = fitMultiJONSWAPCos2s(f, th, S, parmActive, parmStart, spreadType, maxIterFact, tolIter)
+    
+    Tp_ws = vWindSea[0][1]
+    ThetaP_ws = vWindSea[0][6] 
+    iTp_ws = np.argmin(np.abs(f - (1/Tp_ws)))
+    iThetaP_ws = np.argmin(np.abs(angDiff(th, ThetaP_ws)))
+    S_ws = S[iTp_ws, iThetaP_ws]
+    
+    return Tp_ws, ThetaP_ws, S_ws          
 
 
 # ## selectPeakInMaskedSpectrum
@@ -991,14 +1001,14 @@ def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMas
     import numpy as np
     mask = wsMask[iTp_pk, iThetaP_pk]
     if np.shape(S_pk[mask]) == ():
-        return None, None
+        return None, None, None
     imax = np.argmax(S_pk[mask])
-    return Tp_pk[mask][imax], ThetaP_pk[mask][imax]  
+    return Tp_pk[mask][imax], ThetaP_pk[mask][imax], S_pk[mask][imax]
 
 
 # ## selectPeaksFromSpectrum
 
-# In[23]:
+# In[13]:
 
 
 def selectPeaksFromSpectrum(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect):
@@ -1124,7 +1134,7 @@ def selectPeaksByClustering(Tp_pk, ThetaP_pk, S_pk, maxPeaks, x1Scale = 2.5):
         Tp_sel = Tp_pk
         ThetaP_sel = ThetaP_pk
         idx_sel = list(range(0,len(Tp_sel)))
-        whichClus = []
+        whichClus = np.zeros_like(Tp_sel)
 
     return Tp_sel, ThetaP_sel, idx_sel, useClustering, whichClus        
 
@@ -1280,7 +1290,8 @@ def plot2DFittingDiagnostics(
     Sth = dirSpecFrom2D(f, th, S)
     
     # B. Make up wind sea spectrum
-    f_ws, th_ws, S_ws = f, th, S * wsMask 
+    if useWind: 
+        f_ws, th_ws, S_ws = f, th, S * wsMask 
     
     # Make up total reconstructed spectrum, and frequency and direction spectrum
     f_t = f
@@ -1294,7 +1305,7 @@ def plot2DFittingDiagnostics(
             ax.plot(1/Tp_pk[i], ThetaP_pk[i], 'w.', ms=16)
             ax.plot(1/Tp_pk[i], ThetaP_pk[i], 'm.', ms=10)
             if useClustering:
-                ax.text(1/Tp_pk[i], ThetaP_pk[i], str(whichClus[i]), color='white', fontsize=22, ha="left")
+                ax.text(1/Tp_sel[i], ThetaP_sel[i], str(whichClus[i]), color='white', fontsize=22, ha="left")
         o = ""
         for i in range(0, len(Tp_sel)):
             ax.plot(1/Tp_sel[i], ThetaP_sel[i], 'w.', ms=16)
@@ -1404,7 +1415,7 @@ def plotClusterSpace():
 
 # # Make python file
 
-# In[28]:
+# In[26]:
 
 
 #!jupyter nbconvert S2DFit.ipynb --to python

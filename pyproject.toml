@@ -1,16 +1,20 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+#requires = ["hatchling"]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+#build-backend = "hatchling.build"
+[tool.setuptools] 
+packages = ["wavespectra2dsplitfit"]
 
 [project]
 name = "wavespectra2dsplitfit"
-version = "0.5.3"
+version = "0.5.4"
 authors = [
  {name="Jason McConochie", email="j.mcconochie@shell.com"},
 ]
 description = "Ocean wave 2D spectrum partitioning and fitting JONSWAP spectrum"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.6"
 dependencies = [
    "scipy",
    "pandas",

@@ -1,8 +1,8 @@
 import setuptools
 setuptools.setup(
         name="wavespectra2dsplitfit",
-        version="0.5.4",
-        author="Jason McConochie"
+        version="0.5.5",
+        author="Jason McConochie",
         description="Ocean wave 2D spectrum partitioning and fitting JONSWAP spectrum",
         packages=["wavespectra2dsplitfit"]
         )

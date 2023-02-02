@@ -8,7 +8,7 @@ packages = ["wavespectra2dsplitfit"]
 
 [project]
 name = "wavespectra2dsplitfit"
-version = "0.5.5"
+version = "0.5.6"
 authors = [
  {name="Jason McConochie", email="j.mcconochie@shell.com"},
 ]

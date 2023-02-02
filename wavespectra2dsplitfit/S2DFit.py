@@ -310,6 +310,9 @@ def JONSWAP(f, Hs, Tp, gamma = 3.3, sigmaa=0.07, sigmab=0.09, tailexp=-5):
    
     import numpy as np
     g = 9.81      # [m/s^2]
+    if Tp == 0:
+        print("wavespectra2dsplitfit: JONSWAP Tp is 0 - returning 0 spectrum")
+        return np.zeros_like(f)
     fp = 1 / Tp   # [Hz]
     sigma = sigmaa * (f < fp) + sigmab * (f >= fp) 
     G = gamma ** np.exp( -1 * ( ((f-fp) ** 2) / ( 2 * sigma**2 * fp**2)) )
@@ -597,7 +600,7 @@ def dirSpecFrom2D(f, th, S):
 
 # ## windSeaSpectrumMask
 
-# In[1]:
+# In[16]:
 
 
 def windSeaSpectrumMask(f, th, S, wspd, wdir, dpt, agefac = 1.7, seaExp = 1):
@@ -788,6 +791,7 @@ def fit2DSpectrum(
     useWind = False,
     useFittedWindSea = False,
     useWindSeaInClustering = False,
+    fitTailExp = True,    # Use true or give a fixed value 
     wspd = None,
     wdir = None,
     dpt = None,
@@ -823,6 +827,8 @@ def fit2DSpectrum(
             True: Puts TpSea, ThetaPSea into the clustering and lets it take care of it.
             False: Do not use TpSea, ThetaPSea in clustering but instead ensures a wind sea spectrum
                     is fitted in the final fitting as the first partition fixing TpSea, ThetaPSea    
+        - fitTailExp (bool): default=True, either set to True to fit the tail exponent
+                of the JONSWAP spectrum or give a fixed value for the tail exponent (e.g. -5)
         - wspd: wind speed in m/s, required with useWind=True
         - wdir: wind direction [degN, from] (or same direction datum as spectrum), if
             not provided wdir is taken as mean direction of the spectrum for S(f>0.25Hz), optional        
@@ -909,14 +915,26 @@ def fit2DSpectrum(
     else:
         Tp_sel, ThetaP_sel = selectPeaksFromSpectrum(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect)   
 
+    if len(Tp_sel) == 0:
+        print("wavespectra2dsplitfit: S2DFit: fit2DSpectrum - could not find any peak periods")
+        vPart = [[0,0,0,0,0,0,0,0]]
+        fitStatus = [False, 1e6, 0 ]
+        diagOut = [ 
+            f, th, S, 
+            f_sm, th_sm, S_sm, 
+            wsMask,
+            Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus
+        ]
+        return vPart, fitStatus, diagOut
+        
     # D. Build all the inital conditions including the fixed Tp/ThetaP for each partition
     parmActive = []  #[Hs,Tp,Gamma,sigmaa,sigmab,Exponent,WaveDir,sSpread] 
     parmStart = []
     if useWind and (not useWindSeaInClustering):  
-        parmActive.append([True, Tp_ws, True, 0.07, 0.09, True, ThetaP_ws, Tp_ws])
+        parmActive.append([True, Tp_ws, True, 0.07, 0.09, fitTailExp, ThetaP_ws, Tp_ws])
         parmStart.append([2, Tp_ws, 3.3, 0.07, 0.09, -5, ThetaP_ws, Tp_ws])
     for i in range(0,len(Tp_sel)):
-        parmActive.append([True, Tp_sel[i], True, 0.07, 0.09, True,ThetaP_sel[i], Tp_sel[i]])
+        parmActive.append([True, Tp_sel[i], True, 0.07, 0.09, fitTailExp, ThetaP_sel[i], Tp_sel[i]])
         parmStart.append([2, Tp_sel[i], 3.3, 0.07, 0.09, -5, ThetaP_sel[i], Tp_sel[i]])
 
     # E. Run the main fitting of the spectrum
@@ -942,7 +960,7 @@ def fit2DSpectrum(
 
 # ## fitWindSeaSpectrum
 
-# In[18]:
+# In[21]:
 
 
 def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
@@ -978,7 +996,7 @@ def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
 
 # ## selectPeakInMaskedSpectrum
 
-# In[22]:
+# In[49]:
 
 
 def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMask):
@@ -1002,13 +1020,17 @@ def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMas
     mask = wsMask[iTp_pk, iThetaP_pk]
     if np.shape(S_pk[mask]) == ():
         return None, None, None
+    print(S_pk[mask])
+    print(np.shape(S_pk[mask]))
+    if np.shape(S_pk[mask]) == (0,):
+        return None, None, None
     imax = np.argmax(S_pk[mask])
     return Tp_pk[mask][imax], ThetaP_pk[mask][imax], S_pk[mask][imax]
 
 
 # ## selectPeaksFromSpectrum
 
-# In[13]:
+# In[23]:
 
 
 def selectPeaksFromSpectrum(Tp_pk, ThetaP_pk, S_pk, nPeaksToSelect):
@@ -1233,9 +1255,18 @@ def fitMultiJONSWAPCos2s(f, th, S, parmActive, parmStart, spreadType='parametric
 
     maxIter = maxIterFact * len(allParmStart)
     from scipy import optimize
-    x = optimize.minimize(specErrF, allParmStart, args=(f, th, S, parmActive), tol=tolIter,
-                          method="Nelder-Mead",options={'adaptive':True, 'disp':True, 'maxiter':maxIter})
-    
+    try:
+        x = optimize.minimize(specErrF, allParmStart, args=(f, th, S, parmActive), tol=tolIter,
+                              method="Nelder-Mead",options={'adaptive':True, 'disp':True, 'maxiter':maxIter})
+    except:
+        print("wavespectra2dsplitfit: fitMultiJONSWAPCos2s optimisation failed")
+        print(allParmStart)
+        print(parmActive)
+        print(f)
+        print(th)
+        print(S)
+        None
+        
     allPartParms = []
     k=0
     for iPart,vPart in enumerate(parmActive):
@@ -1281,7 +1312,8 @@ def plot2DFittingDiagnostics(
     
     import numpy as np
     import matplotlib.pyplot as plt
-
+    import warnings
+    warnings.filterwarnings("ignore")
     """
     TODO: Complete these
     """
@@ -1305,7 +1337,7 @@ def plot2DFittingDiagnostics(
             ax.plot(1/Tp_pk[i], ThetaP_pk[i], 'w.', ms=16)
             ax.plot(1/Tp_pk[i], ThetaP_pk[i], 'm.', ms=10)
             if useClustering:
-                ax.text(1/Tp_sel[i], ThetaP_sel[i], str(whichClus[i]), color='white', fontsize=22, ha="left")
+                ax.text(1/Tp_pk[i], ThetaP_pk[i], str(whichClus[i]), color='white', fontsize=22, ha="left")
         o = ""
         for i in range(0, len(Tp_sel)):
             ax.plot(1/Tp_sel[i], ThetaP_sel[i], 'w.', ms=16)
@@ -1415,7 +1447,7 @@ def plotClusterSpace():
 
 # # Make python file
 
-# In[26]:
+# In[52]:
 
 
 #!jupyter nbconvert S2DFit.ipynb --to python
@@ -1635,7 +1667,7 @@ def main():
 
 # ## calc_dth
 
-# In[ ]:
+# In[34]:
 
 
 # def calc_dth(th):
@@ -1658,7 +1690,7 @@ def main():
 
 # ## calc_Tp
 
-# In[ ]:
+# In[35]:
 
 
 # def calc_Tp(f, th, Sf):
@@ -1680,7 +1712,7 @@ def main():
 
 # ## calc_ThetaM
 
-# In[ ]:
+# In[36]:
 
 
 # def calc_ThetaM(f, th, S):
@@ -1712,7 +1744,7 @@ def main():
 
 # ## EwansDoubleWrappedNormalSpreading
 
-# In[ ]:
+# In[37]:
 
 
 # def EwansDoubleWrappedNormalSpreading(d,dm1,dm2,s,n):
@@ -1759,7 +1791,7 @@ def main():
 
 # ## EwansDoubleWrappedNormalParameters
 
-# In[ ]:
+# In[38]:
 
 
 # def EwansDoubleWrappedNormalParameters(f,fp):
@@ -1816,7 +1848,7 @@ def main():
 
 # ## specIntParm
 
-# In[ ]:
+# In[39]:
 
 
 # def specIntParm(f, th, S):

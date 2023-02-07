@@ -41,7 +41,7 @@ print(f"RMS error of fit: ",fitStatus[1])
 print(f"Number of function evalutions: ",fitStatus[2])
 
 from wavespectra2dsplitfit.S2DFit import plot2DFittingDiagnostics
-f, th, S, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus = diagOut
+f, th, S, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus, partitionMap, S_t, Sparts_t, Hs_parts_input, Hs_parts_recon = diagOut
 plot2DFittingDiagnostics(
     specParms, 
     f, th, S, 

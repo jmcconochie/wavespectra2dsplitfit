@@ -35,7 +35,7 @@ def runFitting(tag, f, th, S, sDate, timeRange, baseConfig):
 
         # A2. Plot diagnostics
         from wavespectra2dsplitfit.S2DFit import plot2DFittingDiagnostics
-        df, dth, dS, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus = diagOut
+        df, dth, dS, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus, partitionMap, S_t, Sparts_t, Hs_parts_input, Hs_parts_recon = diagOut
         plot2DFittingDiagnostics(
             specParms, 
             df, dth, dS, 
@@ -115,6 +115,7 @@ def main(filename):
         'useWind': False,
         'useFittedWindSea': False, 
         'useWindSeaInClustering': False,
+        'fitTailExp': -5,
     }
     
     timeRange = range(0,len(sDate),1)
@@ -128,7 +129,7 @@ def main(filename):
     return df
 
 
-# In[ ]:
+# In[5]:
 
 
 try:
@@ -145,7 +146,7 @@ except:
 df = main(filename)
 
 
-# In[ ]:
+# In[6]:
 
 
 try:
@@ -153,4 +154,10 @@ try:
     get_ipython().system('jupyter nbconvert fitFromMatlabFile.ipynb --to python')
 except:
     None
+
+
+# In[ ]:
+
+
+
 

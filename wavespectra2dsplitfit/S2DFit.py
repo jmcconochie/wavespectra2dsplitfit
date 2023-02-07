@@ -790,8 +790,9 @@ def fit2DSpectrum(
     useClustering = True,
     useWind = False,
     useFittedWindSea = False,
-    useWindSeaInClustering = False,
-    fitTailExp = True,    # Use true or give a fixed value 
+    useWindSeaInClustering = True,
+    fitTailExp = True,    # Use True to fit the tail exponent or give a fixed value (e.g. -5)
+    scalingHs = -1.0, 
     wspd = None,
     wdir = None,
     dpt = None,
@@ -823,12 +824,14 @@ def fit2DSpectrum(
         - useFittedWindSea (bool): default=False, optional
             True: TpSea, ThetaPSea calculated by fitting a spectrum to the spectra in the wind sea masked area
             False: TpSea, ThetaPSea from maximum in smoothed spectrum of all peaks in the wind sea mask area
-        - useWindSeaInClustering (bool): default=False, optional
+        - useWindSeaInClustering (bool): default=True, optional
             True: Puts TpSea, ThetaPSea into the clustering and lets it take care of it.
             False: Do not use TpSea, ThetaPSea in clustering but instead ensures a wind sea spectrum
-                    is fitted in the final fitting as the first partition fixing TpSea, ThetaPSea    
-        - fitTailExp (bool): default=True, either set to True to fit the tail exponent
+                 is fitted in the final fitting as the first partition fixing TpSea, ThetaPSea    
+        - fitTailExp (bool, float): default=True, either set to True to fit the tail exponent
                 of the JONSWAP spectrum or give a fixed value for the tail exponent (e.g. -5)
+        - scalingHs (float): default = -1 which will do no scaling; 0.0 which will use internal automatic scaling 
+                to the input spectrum (S) total Hs, otherwise give a value of Hs to scale to 
         - wspd: wind speed in m/s, required with useWind=True
         - wdir: wind direction [degN, from] (or same direction datum as spectrum), if
             not provided wdir is taken as mean direction of the spectrum for S(f>0.25Hz), optional        
@@ -850,7 +853,12 @@ def fit2DSpectrum(
             f_ws, th_ws, S_ws, wsMask - the wind sea spectrum
             Tp_pks, ThetaP_pks, Tp_sel, ThetaP_sel, whichClus - the peaks from peak selection and the selected peaks 
                   and the cluster each peak belongs to
-        
+            partitionMap, S_t, Sparts_t, Hs_parts_input, Hs_parts_recon - outputs from scalePartitions
+                - vPart with updated values of significant wave height for each partition
+                - partitionMap (2darray) - integer array same size as input spectrum defining which
+                    partition has the higest spectral densities (this is used to define the Hs for scaling) [nf,nth]
+                - S_t (2darray) - scaled spectrum reconstruction for total spectrum [nf,nth]
+                - Sparts_t (3darray) - scaled spectrum reconstruction for each partition [ipart,nf,nth]
 
     Reference: 
         - Written: Jason McConochie 15/Dec/2022
@@ -905,8 +913,7 @@ def fit2DSpectrum(
             S_pk = np.append(S_pk,S_ws)
         else:
             # Reduce number of peaks to select since one of them will be the wind sea
-            if not useClustering:
-                nPeaksToSelect = nPeaksToSelect - 1
+            nPeaksToSelect = nPeaksToSelect - 1
                 
     # C. Clustering or Peak Selection
     whichClus = None
@@ -923,7 +930,8 @@ def fit2DSpectrum(
             f, th, S, 
             f_sm, th_sm, S_sm, 
             wsMask,
-            Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus
+            Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus,
+            None, None, None, None, None
         ]
         return vPart, fitStatus, diagOut
         
@@ -948,13 +956,17 @@ def fit2DSpectrum(
         nPart[iPart] = vPart[sPartTps[iPart]] 
     vPart = nPart
     
+    # G. Scaling of the partitions
+    vPart, partitionMap, S_t, Sparts_t, Hs_parts_input, Hs_parts_recon = scalePartitions(f, th, S, vPart, scalingHs = scalingHs, diag=False)
+   
     diagOut = [ 
         f, th, S, 
         f_sm, th_sm, S_sm, 
         wsMask,
-        Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus
+        Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus,
+        partitionMap, S_t, Sparts_t, Hs_parts_input, Hs_parts_recon
     ]
-
+ 
     return vPart, fitStatus, diagOut
 
 
@@ -996,7 +1008,7 @@ def fitWindSeaSpectrum(f, th, S, spreadType, maxIterFact=500, tolIter=1e-2):
 
 # ## selectPeakInMaskedSpectrum
 
-# In[49]:
+# In[22]:
 
 
 def selectPeakInMaskedSpectrum(Tp_pk, ThetaP_pk, iTp_pk, iThetaP_pk, S_pk, wsMask):
@@ -1285,9 +1297,147 @@ def fitMultiJONSWAPCos2s(f, th, S, parmActive, parmStart, spreadType='parametric
     return allPartParms, fitStatus
 
 
-# ## plot2DFittingDiagnostics
+# ## scalePartitions
 
 # In[26]:
+
+
+def scalePartitions(f, th, S, vPart, scalingHs=-1, diag=False):
+    """ Scale Hs of partitions to match input spectrum or user defined total Hs
+
+    Method: Input spectrum is defined by f, th, S(f,th).  Create 2D spectrum for 
+    each spectral partition defined by vPart.  A map of dominant partitions is defined by the components that
+    have the highest spectral density for each frequency and direction bin; the map is provided in the output.  
+    For each partition, defined by the map, the Hs is calculated for both the input 
+    spectrum and the partitions (defined by vPart and calculated are recreating a full JONSWAP/cos2s equivalent).
+    These two Hs values are then used to scale the vPart Hs values to match the input spectrum, and if given the 
+    scalingHs is used to adjust the total Hs of the entire spectrum.  
+
+    Args:
+        - f (1darray): spectrum frequencies [Hz]
+        - th (1darray): spectrum directions [deg]
+        - S (2darray): Input spectrum - Array of spectral densities in [m^/(Hz.deg)]
+        - vPart (2darray): Array containing vectors of [Hs,Tp,gamma,sigmaa,sigmab,jexp,waveDir,s]
+            e.g. [ [Hs,Tp,gamma,sigmaa,sigmab,jexp,waveDir,s], [Hs,Tp,gamma,sigmaa,sigmab,jexp,waveDir,s], ...]
+        - scalingHs (float): default = -1 which will do no scaling; 0.0 which will use internal automatic scaling 
+                to the input spectrum (S) total Hs, otherwise give a value of Hs to scale to         - diag (bool): True to produce diagnostic output including plots
+
+    Returns:
+        - vPart with updated values of significant wave height for each partition
+        - partitionMap (2darray) - integer array same size as input spectrum defining which
+            partition has the higest spectral densities (this is used to define the Hs for scaling) [nf,nth]
+        - S_t (2darray) - scaled spectrum reconstruction for total spectrum [nf,nth]
+        - Sparts_t (3darray) - scaled spectrum reconstruction for each partition [ipart,nf,nth]
+
+    Reference: 
+        - Written: Jason McConochie 4/Feb/2022
+
+    """
+    import numpy as np
+    
+    def calcHs(f,th,tS):
+    
+        # This function is specific to the scaling which will have zero stepped boundaries
+        # so cannot use trapezoidal integration
+    
+        import numpy as np
+        import numpy.matlib as ml
+
+        # 0 Matrix versions
+        nf = np.size(f)
+        nth = np.size(th)
+        df = dfFromf(f)
+        dth = dthFromth(th * np.pi/180)
+        dfm = np.transpose(ml.repmat(df,nth,1))
+        dthm = ml.repmat(np.transpose(dth),nf,1)
+        tS = tS * 180/np.pi
+
+        # A. Tail moments
+        fcut = f[-1] + df[-1]/2
+        ecut = tS[-1]
+        m0t = 1/4 * fcut * ecut
+        m0t = 0
+
+        m0  = np.sum ( np.sum( dthm * dfm * tS, 0) + m0t )
+        Hm0 = 4 * np.sqrt(m0)
+        return Hm0
+    
+    # A. Get the Hs from the input spectrum and select the total Hs for the output parameters
+    if scalingHs == 0.0:
+        totalHs = calcHs(f, th, S) # from input spectrum  
+        # TODO: This should use full 2D trapezoidal integration but the scaling below on the partitions
+        #  need to use basic rectangular integrations for the scaling on the individual partitions
+    else:
+        totalHs = scalingHs
+
+    # B. Make the spectrum of each partition
+    S_t, Sparts_t = multiJONSWAPCos2s(f, th, vPart, spreadType='parametric')
+    
+    totalHs_input = calcHs(f, th, S)
+    totalHs_recon = calcHs(f, th, S_t)
+    if diag:
+        print("totalHs input",totalHs_input)
+        print("totalHs recon",totalHs_recon)
+        print("input vPar",vPart)
+    
+    # C. Make the partition maps based on the original unscaled spectra parts
+    partitionMap = np.argmax(Sparts_t,0);
+    if diag:
+        import matplotlib.pyplot as plt
+        def setAx(ax):
+                ax.set_xlim(0,0.4)
+                ax.set_ylim(0,360)
+                ax.set_yticks(np.arange(0,361,45))
+        fg,a = plt.subplots(1,1,figsize=(3,3))
+        plt.pcolormesh(f,th,np.transpose(partitionMap))
+        plt.colorbar()
+        plt.title('Partition Map')
+        setAx(a)
+    
+    # D. Get the Hs for each of the partitions from the reconstructed and the input spectrum
+    import copy
+    nParts = np.shape(Sparts_t)[0]
+    Hs_parts_input = np.zeros((nParts))
+    Hs_parts_recon = np.zeros((nParts))
+    for i in range(0, nParts):
+        # Do the input spectrum
+        oS = copy.deepcopy(S)
+        mask = partitionMap == i
+        oS[np.logical_not(mask)] = 0
+
+        Hs_parts_input[i] = calcHs(f, th, oS)
+        # Do the reconstructed partitions
+        mS = Sparts_t[i,:,:]
+        if diag:
+            fg, h = plt.subplots(1,3, figsize=(9,3))
+            h[0].pcolormesh(f,th,np.transpose(oS));setAx(h[0])
+            h[1].pcolormesh(f,th,np.transpose(mS));setAx(h[1])
+            h[2].pcolormesh(f,th,np.transpose(np.reshape(mask,np.shape(mS))));setAx(h[2])
+        mS[np.isnan(mS)] = 0
+        Hs_parts_recon[i] = calcHs(f,th,mS)
+    
+    # E. Full scaling for whole spectrum (either requested by user or calculated from input spectrum)
+    if scalingHs != -1: # produce all outputs except dont apply the 
+        eHs = np.sqrt(np.sum(Hs_parts_input**2))
+        scale = totalHs / eHs
+        for i,tPart in enumerate(vPart):
+            tPart[0] = Hs_parts_input[i] * scale # use Hs for this partition as calculated from the partitionMap
+    
+    if diag:
+        print("Hs_parts_input",Hs_parts_input)
+        print("Hs_parts_recon",Hs_parts_recon)
+        print("vPart output:",vPart)
+        print("totalHs vPart output",np.sqrt(np.sum(np.array([x[0] for x in vPart])**2)))
+    
+    # E. Create the full rescaled spectra
+    S_t, Sparts_t = multiJONSWAPCos2s(f, th, vPart, spreadType='parametric')
+    
+    return vPart, partitionMap, S_t, Sparts_t, Hs_parts_input, Hs_parts_recon
+
+
+# ## plot2DFittingDiagnostics
+
+# In[27]:
 
 
 def plot2DFittingDiagnostics(
@@ -1348,7 +1498,9 @@ def plot2DFittingDiagnostics(
     S[S<1e-9]=1e-9;
     S_sm[S_sm<1e-9]=1e-9;
     
-    fg,b = plt.subplots(3,3,figsize=(15,15))
+    from matplotlib import figure
+    fg = figure.Figure(figsize=(15,15))
+    b = fg.subplots(3,3)
     
     ta = b[0][0]
     ta.pcolormesh(f, th, np.transpose(S))
@@ -1410,11 +1562,13 @@ def plot2DFittingDiagnostics(
 
     fg.savefig(saveFigFilename+"_pk.png")
     plt.close(fg)
+    plt.close('all')
+    
 
 
 # ## plotClusterSpace
 
-# In[27]:
+# In[28]:
 
 
 def plotClusterSpace():
@@ -1423,9 +1577,12 @@ def plotClusterSpace():
     ####tag - text string identifier pre-predended to filename of plot image saved to png.
     ###   May include the path (e.g.  c:\myPathtoDir\tagName)
     
-
     import matplotlib.pyplot as plt
-    f,a = plt.subplots(1,2,figsize=(10,5))
+    
+    from matplotlib import figure
+    f = figure.Figure(figsize=(10,5))
+    a = fg.subplots(1,2)
+    
     ta = a[0]
     ta.plot(Tp_pk,ThetaP_pk,'k.',ms=16)
     ta.plot(Tp_sel,ThetaP_sel,'m.',ms=8)
@@ -1443,11 +1600,13 @@ def plotClusterSpace():
     ta.set_title('Normal/clustering space')
     f.savefig(f"{tag}_cs.png")
     plt.close(f)
+    plt.close('all')
+    
 
 
 # # Make python file
 
-# In[52]:
+# In[38]:
 
 
 #!jupyter nbconvert S2DFit.ipynb --to python
@@ -1455,79 +1614,48 @@ def plotClusterSpace():
 
 # # Testing
 
-# In[29]:
-
-
-def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
-
-    import scipy.io
-    mat = scipy.io.loadmat(filename)
-    mat.keys()
-    tm = mat[dates]
-    f_in = mat[freq]
-    th_in = mat[dirn]
-    S_in = mat[spec2d]
-
-    import numpy as np
-    import datetime as dt
-    sDate = [dt.datetime(x[0],x[1],x[2],x[3],x[4],x[5]) for x in tm]
-    f = f_in[0]
-    th = th_in[0]
-    S = S_in * np.pi/180 # convert from m^2/(Hz.rad) to m^2/(Hz.deg)
-    
-    return f, th, S, sDate
-
-
 # In[30]:
 
 
-def main():
-    import numpy as np
-    filename = "data/ExampleWaveSpectraObservations.mat"
+def testlib():
+    
+    def readspec_mat(filename, dates="td", freq="fd", dirn="thetad", spec2d="spec2d"):  
+
+        import scipy.io
+        mat = scipy.io.loadmat(filename)
+        print(mat.keys())
+        tm = mat[dates]
+        f_in = mat[freq]
+        th_in = mat[dirn]
+        S_in = mat[spec2d]
+
+        import numpy as np
+        import datetime as dt
+        sDate = [dt.datetime(x[0],x[1],x[2],x[3],x[4],x[5]) for x in tm]
+        f = f_in[0]
+        th = th_in[0]
+        S = S_in * np.pi/180 # convert from m^2/(Hz.rad) to m^2/(Hz.deg)
+
+        return f, th, S, sDate
+
+
+    # A. Read test spectrum
+    filename = "../data/ExampleWaveSpectraObservations.mat"
     f, th, S, sDate = readspec_mat(filename)
-    n = np.shape(S)[0]
-    for i in range(1):
-        print("=========== ",i)
-        vPart, fitStatus, diagOut = fit2DSpectrum(f, th, S[i,:,:],maxPartitions=3)
-        print(vPart)
-        print(fitStatus)
 
-        S_t, Sparts_t = multiJONSWAPCos2s(f, th, vPart, spreadType='parametric')
-        import matplotlib.pyplot as plt
-        Sparts_t[Sparts_t<1e-6] = 0
-        m = np.argmax(Sparts_t,axis=0)
-        Sparts_t[Sparts_t<1e-6] = np.nan
-        plt.figure()
-        plt.pcolormesh(f,th,np.transpose(m))
-        plt.colorbar()
-
-        for i in range(0,np.shape(Sparts_t)[0]):
-            plt.figure()
-            plt.pcolormesh(f, th, np.transpose(Sparts_t[i,:,:]))
-
-        f, th, S, f_sm, th_sm, S_sm, wsMask, Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus = diagOut
-        useWind = False
-        useClustering = True
-        plt.figure()
-        plot2DFittingDiagnostics(
-            vPart, 
-            f, th, S, 
-            f_sm, th_sm, S_sm, 
-            wsMask,
-            Tp_pk, ThetaP_pk, Tp_sel, ThetaP_sel, whichClus,
-            useWind, useClustering,
-            saveFigFilename = 'plot.png',  
-            plotClusterSpace = True,       
-            iTime = None,                  
-            fTime = None,                
-            tag = "S2DFit"  
-        )
+    # B. Run the fit
+    import numpy as np
+    i = 1
+    print("=========== ",i,sDate[i])
+    vPart, fitStatus, diagOut = fit2DSpectrum(f, th, S[i,:,:],maxPartitions=3)
+    print(vPart)
+    print(fitStatus) 
 
 
-# In[31]:
+# In[ ]:
 
 
-#main()
+#testlib()
 
 
 # In[ ]:
@@ -1562,10 +1690,30 @@ def main():
 
 
 
+# In[ ]:
 
-# # Ununsed
 
-# In[32]:
+#   # D. This is check code only
+#   checking = False
+#   if checking:
+#       def scaleSpectrumTo(f, th, S, Hs_target):
+#           import numpy as np
+#           Hs_in = calcHs(f,th,S)
+#           scale = (Hs_target / Hs_in) ** 2;
+#           S = S * scale;
+#           return S
+#       Hs_parts_sc = []
+#       for i in range(0, np.shape(Sparts_t)[0]):
+#           Sparts_t[i,:,:] = scaleSpectrumTo(f, th, Sparts_t[i,:,:], Hs_parts[i])
+#           mS = Sparts_t[i,:,:]
+#           mS[np.isnan(mS)] = 0
+#           Hs_parts_sc.append(calcHs(f,th,mS))
+#       print("Hsparts_sc = ", Hs_parts_sc)
+
+ 
+
+
+# In[ ]:
 
 
 # def _make_df(self):
@@ -1600,7 +1748,7 @@ def main():
    
 
 
-# In[33]:
+# In[ ]:
 
 
 #     def autoCorrect(self):
@@ -1667,7 +1815,7 @@ def main():
 
 # ## calc_dth
 
-# In[34]:
+# In[ ]:
 
 
 # def calc_dth(th):
@@ -1690,7 +1838,7 @@ def main():
 
 # ## calc_Tp
 
-# In[35]:
+# In[ ]:
 
 
 # def calc_Tp(f, th, Sf):
@@ -1712,7 +1860,7 @@ def main():
 
 # ## calc_ThetaM
 
-# In[36]:
+# In[ ]:
 
 
 # def calc_ThetaM(f, th, S):
@@ -1744,7 +1892,7 @@ def main():
 
 # ## EwansDoubleWrappedNormalSpreading
 
-# In[37]:
+# In[ ]:
 
 
 # def EwansDoubleWrappedNormalSpreading(d,dm1,dm2,s,n):
@@ -1791,7 +1939,7 @@ def main():
 
 # ## EwansDoubleWrappedNormalParameters
 
-# In[38]:
+# In[ ]:
 
 
 # def EwansDoubleWrappedNormalParameters(f,fp):
@@ -1848,7 +1996,7 @@ def main():
 
 # ## specIntParm
 
-# In[39]:
+# In[ ]:
 
 
 # def specIntParm(f, th, S):
